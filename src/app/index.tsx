@@ -1,6 +1,10 @@
 import { Redirect } from 'expo-router';
+import { useSession } from '@/features/session/SessionProvider';
+import { homeRouteFor } from '@/features/session/sessionLogic';
 
-// Later: send landlords to /(landlord) and logged-out users to login.
+// Guests and students open the student app; provider-mode users open the landlord app.
 export default function Index() {
-  return <Redirect href="/(student)" />;
+  const { status, user } = useSession();
+  if (status === 'loading') return null;
+  return <Redirect href={homeRouteFor(user?.activeMode ?? 'student')} />;
 }
