@@ -9,7 +9,7 @@ export function useAfterAuth() {
   return useCallback(
     (user: MockUser) => {
       if (router.canDismiss()) router.dismissAll();
-      if (user.activeMode === 'provider') router.replace(homeRouteFor('provider'));
+      router.replace(homeRouteFor(user.activeMode));
     },
     [router],
   );
