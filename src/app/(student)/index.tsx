@@ -14,6 +14,8 @@ import {
   type Property,
 } from '@/data';
 import { ContentContainer } from '@/components/ContentContainer';
+import { useSession } from '@/features/session/SessionProvider';
+import { greetingFor } from '@/features/session/sessionLogic';
 import { DemoNotice } from '@/components/DemoNotice';
 import { DemoTag } from '@/components/DemoTag';
 import { PropertyCard } from '@/components/PropertyCard';
@@ -28,6 +30,7 @@ type HomeData = { featured: Property[]; cities: CitySummary[]; nearAse: Property
 
 export default function HomeScreen() {
   const layout = useResponsive();
+  const { user } = useSession();
   const [data, setData] = useState<HomeData | null>(null);
 
   useEffect(() => {
@@ -48,7 +51,7 @@ export default function HomeScreen() {
         {/* Hero: full-width background, centred content */}
         <View style={styles.hero}>
           <ContentContainer style={{ gap: spacing.sm }}>
-            <Text style={styles.greeting}>Bună dimineața, Ana</Text>
+            <Text style={styles.greeting}>{greetingFor(user)}</Text>
             <Text style={[styles.headline, layout.isSmallPhone && styles.headlineSmall]}>Find your place.</Text>
             <Text style={[styles.headline, layout.isSmallPhone && styles.headlineSmall, { color: colors.primary }]}>
               Start your student life.

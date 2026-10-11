@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '@/theme';
 import { describeDetail, formatNumber, isDemo, isVerified, type Property } from '@/data';
 import { DemoTag } from '@/components/DemoTag';
+import { useRequireAccount } from '@/features/session/useRequireAccount';
 
 type Props = { property: Property; width?: number; initiallySaved?: boolean };
 
@@ -12,6 +13,7 @@ type Props = { property: Property; width?: number; initiallySaved?: boolean };
 export function PropertyCard({ property, width, initiallySaved = false }: Props) {
   const [saved, setSaved] = useState(initiallySaved);
   const demo = isDemo(property);
+  const requireAccount = useRequireAccount();
 
   return (
     <View style={[styles.card, width ? { width } : null]}>
@@ -24,7 +26,7 @@ export function PropertyCard({ property, width, initiallySaved = false }: Props)
           </View>
         )}
         {demo && <DemoTag style={styles.demo} />}
-        <Pressable onPress={() => setSaved(!saved)} style={[styles.heart, saved && styles.heartOn]} hitSlop={8}>
+        <Pressable onPress={() => requireAccount(() => setSaved((v) => !v))} style={[styles.heart, saved && styles.heartOn]} hitSlop={8}>
           <Ionicons name={saved ? 'heart' : 'heart-outline'} size={20} color={saved ? '#fff' : colors.text} />
         </Pressable>
       </View>

@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo/ui": "~57.0.21",
     "@expo/vector-icons": "^15.0.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.26",
     "expo-constants": "~57.0.20",
     "expo-device": "~57.0.2",
@@ -42,7 +43,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test:logic": "tsx src/features/plans/plans.test.ts && tsx src/data/repository.test.ts"
+    "test:logic": "tsx src/features/plans/plans.test.ts && tsx src/data/repository.test.ts && tsx src/features/session/session.test.ts"
   },
   "private": true
 }
