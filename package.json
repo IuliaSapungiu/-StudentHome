@@ -42,7 +42,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test:logic": "tsx --test src/**/*.test.ts"
+    "test:logic": "tsx src/features/plans/plans.test.ts && tsx src/data/repository.test.ts"
   },
   "private": true
 }
