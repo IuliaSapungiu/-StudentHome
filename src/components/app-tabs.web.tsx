@@ -1,3 +1,4 @@
+
 import {
   Tabs,
   TabList,
@@ -24,9 +25,6 @@ export default function AppTabs() {
           <TabTrigger name="home" href="/" asChild>
             <TabButton>Home</TabButton>
           </TabTrigger>
-          <TabTrigger name="explore" href="/explore" asChild>
-            <TabButton>Explore</TabButton>
-          </TabTrigger>
         </CustomTabList>
       </TabList>
     </Tabs>
@@ -38,7 +36,8 @@ export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps
     <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
       <ThemedView
         type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
-        style={styles.tabButtonView}>
+        style={styles.tabButtonView}
+      >
         <ThemedText type="small" themeColor={isFocused ? 'text' : 'textSecondary'}>
           {children}
         </ThemedText>
@@ -55,7 +54,7 @@ export function CustomTabList(props: TabListProps) {
     <View {...props} style={styles.tabListContainer}>
       <ThemedView type="backgroundElement" style={styles.innerContainer}>
         <ThemedText type="smallBold" style={styles.brandText}>
-          Expo Starter
+          StudentHouse
         </ThemedText>
 
         {props.children}
