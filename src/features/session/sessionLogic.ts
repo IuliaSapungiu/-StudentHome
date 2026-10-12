@@ -1,13 +1,33 @@
+import { newId } from '../../lib/id';
 import type { MockUser, Mode, ProviderProfile, RegistrationIntent, SessionAction, SessionState } from './types';
 
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
-export const generateId = () => `mock-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+export const generateId = newId;
 
-export function createUser(email: string, intent: RegistrationIntent, id: string = generateId()): MockUser {
+/** Version label recorded with terms acceptance. The real legal texts replace the demo placeholders later. */
+export const TERMS_VERSION = 'demo-0';
+
+export type NewUserDetails = {
+  fullName?: string;
+  phone?: string | null;
+  termsAcceptedAt?: string | null;
+  termsVersion?: string | null;
+};
+
+export function createUser(
+  email: string,
+  intent: RegistrationIntent,
+  id: string = generateId(),
+  details: NewUserDetails = {},
+): MockUser {
   return {
     id,
     email: normalizeEmail(email),
+    ...(details.fullName ? { fullName: details.fullName.trim() } : {}),
+    phone: details.phone ?? null,
+    termsAcceptedAt: details.termsAcceptedAt ?? null,
+    termsVersion: details.termsVersion ?? null,
     profiles: {
       student: intent === 'student' || intent === 'both',
       provider: intent === 'provider' || intent === 'both' ? { onboardingComplete: false } : null,
@@ -52,7 +72,21 @@ export function homeRouteFor(mode: Mode) {
   return mode === 'provider' ? ('/(landlord)' as const) : ('/(student)' as const);
 }
 
-const firstName = (u: MockUser) => u.displayName?.trim().split(/\s+/)[0] ?? '';
+/** Full name, falling back to the legacy `displayName` of older accounts. */
+export const fullNameOf = (u: MockUser): string | undefined => u.fullName?.trim() || u.displayName?.trim() || undefined;
+
+const firstName = (u: MockUser) => fullNameOf(u)?.split(/\s+/)[0] ?? '';
+
+/** The mode to use: the stored preference if the account has that profile, otherwise one it has. */
+export function resolveActiveMode(u: Pick<MockUser, 'profiles' | 'activeMode'>): Mode {
+  const has = (m: Mode) => (m === 'student' ? u.profiles.student : u.profiles.provider !== null);
+  if (has(u.activeMode)) return u.activeMode;
+  return u.profiles.student ? 'student' : 'provider';
+}
+
+/** Repairs a user's active mode. Safe to apply repeatedly. */
+export const normalizeUser = (u: MockUser): MockUser =>
+  resolveActiveMode(u) === u.activeMode ? u : { ...u, activeMode: resolveActiveMode(u) };
 
 /** Guests: "Welcome to StudentHouse". Signed-in users: "Welcome back". */
 export function greetingFor(user: MockUser | null): string {
@@ -62,12 +96,16 @@ export function greetingFor(user: MockUser | null): string {
 }
 
 export function initialsFor(u: MockUser): string {
-  const words = u.displayName?.trim().split(/\s+/).filter(Boolean) ?? [];
+  const words = fullNameOf(u)?.split(/\s+/).filter(Boolean) ?? [];
   if (words.length) return words.slice(0, 2).map((w) => w[0].toUpperCase()).join('');
   return (u.email[0] ?? '?').toUpperCase();
 }
 
-/** Validates data read from storage. Anything unexpected is rejected rather than trusted. */
+/**
+ * Validates and upgrades data read from storage. Accounts written by earlier steps (no phone,
+ * terms or full name) are upgraded with null defaults. A stored activeMode that the account does
+ * not actually have is repaired, not rejected. Only genuinely corrupt records return null.
+ */
 export function parseUser(value: unknown): MockUser | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
@@ -78,18 +116,21 @@ export function parseUser(value: unknown): MockUser | null {
   if (provider !== null && (typeof provider !== 'object' || typeof (provider as ProviderProfile).onboardingComplete !== 'boolean')) {
     return null;
   }
-  if (v.activeMode !== 'student' && v.activeMode !== 'provider') return null;
+  if (!profiles.student && provider === null) return null; // an account must have at least one profile
+  const str = (x: unknown) => (typeof x === 'string' ? x : null);
   const user: MockUser = {
     id: v.id,
     email: v.email,
+    ...(typeof v.fullName === 'string' ? { fullName: v.fullName } : {}),
     ...(typeof v.displayName === 'string' ? { displayName: v.displayName } : {}),
     ...(v.isDemo === true ? { isDemo: true } : {}),
+    phone: str(v.phone),
+    termsAcceptedAt: str(v.termsAcceptedAt),
+    termsVersion: str(v.termsVersion),
     profiles: { student: profiles.student, provider: provider as ProviderProfile | null },
-    activeMode: v.activeMode,
+    activeMode: v.activeMode === 'student' || v.activeMode === 'provider' ? v.activeMode : 'student',
   };
-  // A user must have at least one profile, and the active mode must exist.
-  if (!user.profiles.student && !user.profiles.provider) return null;
-  return isModeAvailable(user, user.activeMode) ? user : null;
+  return normalizeUser(user);
 }
 
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {

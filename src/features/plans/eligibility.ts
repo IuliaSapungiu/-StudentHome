@@ -3,7 +3,7 @@ import type { PlanId, Portfolio, ProviderType } from './types';
 
 // ---- Adjustable rules (the only place these numbers live) -------------------
 
-type ProviderPlanRules = {
+export type ProviderPlanRules = {
   /** Basic is offered up to this many properties. null = Basic is never offered. */
   basicMaxProperties: number | null;
   /** Business is offered from this many properties (1 = always offered). */

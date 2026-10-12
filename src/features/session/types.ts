@@ -10,10 +10,19 @@ export type ProviderProfile = { onboardingComplete: boolean };
 export type MockUser = {
   id: string;
   email: string;
+  /** Full name given at registration. Older accounts only have `displayName`. */
+  fullName?: string;
+  /** Legacy name field from earlier steps; read through fullNameOf(). */
   displayName?: string;
+  /** E.164 phone number (format-checked only, never proof of ownership). null = not provided yet. */
+  phone: string | null;
+  /** When the Terms and Privacy Policy were accepted (ISO UTC), and which version. null = not recorded. */
+  termsAcceptedAt: string | null;
+  termsVersion: string | null;
   /** True for preview accounts created by the demo shortcuts (see src/demo). */
   isDemo?: boolean;
   profiles: { student: boolean; provider: ProviderProfile | null };
+  /** A local UI preference. Always resolved against the profiles the account really has. */
   activeMode: Mode;
 };
 

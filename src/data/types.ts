@@ -1,4 +1,5 @@
 import type { PlanId } from '../features/plans/types';
+import type { VerificationStatus } from '../features/verification/types';
 
 export type ListingStatus = 'draft' | 'ready_to_publish' | 'payment_successful' | 'published' | 'expired';
 
@@ -17,6 +18,8 @@ export type Amenity =
 
 export type Property = {
   id: string;
+  /** The provider account that owns the property (stable id, not a display name). */
+  ownerId: string;
   source: ListingSource;
   status: ListingStatus;
   /** Plan the listing is published under. Drives Verified badge and ranking. null for drafts. */
@@ -36,7 +39,17 @@ export type Property = {
   /** ISO date (YYYY-MM-DD). */
   availableFrom: string;
   nearestUniversity: { name: string; minutes: number };
+  /**
+   * READ-MODEL FIELD, computed by the repository from the owner's identity-verification record.
+   * It is not stored on the property. It says nothing about the property itself being verified.
+   */
+  landlordIdentityVerified: boolean;
 };
+
+/** What is stored for a property (the read model minus fields derived at read time). */
+export type PropertyRecord = Omit<Property, 'landlordIdentityVerified'>;
+
+export type OwnerIdentityStatuses = Record<string, VerificationStatus>;
 
 export type CitySummary = { name: string; homeCount: number; image: string };
 

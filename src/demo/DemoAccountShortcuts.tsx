@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radius } from '@/theme';
 import { useSession } from '@/features/session/SessionProvider';
 import type { MockUser } from '@/features/session/types';
+import { demoControls } from './demoControls';
 import { DEMO_ACCOUNTS } from './demoAccounts';
 
 // DEMO ONLY. "or preview account types" on the login screen. See src/demo/README.md to remove.
@@ -19,7 +20,10 @@ export function DemoAccountShortcuts({ onSignedIn }: { onSignedIn: (user: MockUs
         <Pressable
           key={a.key}
           accessibilityRole="button"
-          onPress={async () => onSignedIn(await signInAsMockUser(a.user))}
+          onPress={async () => {
+            await demoControls.seedDemoAccount(a.user); // simulated: email verified, phone not verified
+            onSignedIn(await signInAsMockUser(a.user));
+          }}
           style={styles.row}>
           <Ionicons name={a.key === 'both' ? 'people-outline' : a.key === 'landlord' ? 'home-outline' : 'school-outline'} size={20} color={colors.primary} />
           <Text style={styles.label}>{a.label}</Text>

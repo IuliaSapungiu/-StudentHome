@@ -5,12 +5,14 @@ import { useRouter } from 'expo-router';
 import { colors, spacing } from '@/theme';
 import { BackButton } from '@/components/BackButton';
 import { Button } from '@/components/Button';
+import { Checkbox } from '@/components/Checkbox';
 import { ContentContainer } from '@/components/ContentContainer';
+import { FieldRenderer } from '@/components/FieldRenderer';
 import { OptionCard } from '@/components/OptionCard';
-import { TextField } from '@/components/TextField';
+import { cleanAnswers, isFieldRequired, validateForm } from '@/features/forms/formRules';
+import { useRegistrationForm } from '@/features/forms/useFormConfig';
+import type { Answers } from '@/features/forms/types';
 import { useSession } from '@/features/session/SessionProvider';
-import { useAfterAuth } from '@/features/session/useAfterAuth';
-import { validateEmail, validateNewPassword } from '@/features/session/validation';
 import type { RegistrationIntent } from '@/features/session/types';
 
 const OPTIONS: { intent: RegistrationIntent; icon: 'school-outline' | 'home-outline' | 'people-outline'; title: string; subtitle: string }[] = [
@@ -22,24 +24,45 @@ const OPTIONS: { intent: RegistrationIntent; icon: 'school-outline' | 'home-outl
 export default function RegisterScreen() {
   const router = useRouter();
   const { register } = useSession();
-  const afterAuth = useAfterAuth();
+  const form = useRegistrationForm();
   const [intent, setIntent] = useState<RegistrationIntent>('student');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<{ email?: string | null; password?: string | null; form?: string }>({});
+  const [values, setValues] = useState<Answers>({ acceptTerms: false });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const submit = async () => {
-    const next = { email: validateEmail(email), password: validateNewPassword(password) };
-    setErrors(next);
-    if (next.email || next.password) return;
-    setBusy(true);
-    const result = await register({ email, intent }); // the password is validated here and never stored
-    setBusy(false);
-    if (!result.ok) return setErrors({ form: result.error });
-    setPassword('');
-    afterAuth(result.user);
+  if (!form) return null;
+
+  const set = (key: string) => (v: string | boolean) => {
+    setValues((prev) => ({ ...prev, [key]: v }));
+    if (errors[key]) setErrors(({ [key]: _removed, ...rest }) => rest);
   };
+
+  const submit = async () => {
+    const found = validateForm(form, values);
+    setErrors(found);
+    setFormError(null);
+    if (Object.keys(found).length) return;
+    const clean = cleanAnswers(form, values);
+    setBusy(true);
+    // The password is validated here and never stored or sent to the session layer.
+    const result = await register({
+      email: String(clean.email),
+      intent,
+      fullName: String(clean.fullName),
+      phone: String(clean.phone),
+      termsAccepted: clean.acceptTerms === true,
+    });
+    setBusy(false);
+    if (!result.ok) return setFormError(result.error);
+    setValues((prev) => ({ ...prev, password: '' }));
+    router.replace({ pathname: '/verify-email', params: { from: 'register' } });
+  };
+
+  const fields = Object.fromEntries(form.fields.map((f) => [f.key, f]));
+  const render = (key: string) => (
+    <FieldRenderer key={key} field={fields[key]} value={values[key]} required={isFieldRequired(fields[key], values)} error={errors[key]} onChange={set(key)} />
+  );
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -62,29 +85,26 @@ export default function RegisterScreen() {
               ))}
             </View>
 
-            <TextField
-              label="Email address"
-              placeholder="you@email.com"
-              value={email}
-              onChangeText={setEmail}
-              error={errors.email}
-              autoCapitalize="none"
-              autoComplete="email"
-              keyboardType="email-address"
-              textContentType="emailAddress"
-            />
-            <TextField
-              label="Create password"
-              placeholder="At least 8 characters"
-              value={password}
-              onChangeText={setPassword}
-              error={errors.password}
-              secureTextEntry
-              autoComplete="new-password"
-              textContentType="newPassword"
-            />
+            <Text style={styles.legend}>Fields marked * are required.</Text>
+            {render('fullName')}
+            {render('email')}
+            {render('phone')}
+            {render('password')}
 
-            {errors.form ? <Text style={styles.formError}>{errors.form}</Text> : null}
+            <View style={{ gap: 6 }}>
+              <Checkbox checked={values.acceptTerms === true} onChange={set('acceptTerms')} error={!!errors.acceptTerms}>
+                <Text style={styles.terms}>
+                  I accept the{' '}
+                  <Text style={styles.link} onPress={() => router.push('/terms')}>Terms and Conditions</Text>
+                  {' '}and the{' '}
+                  <Text style={styles.link} onPress={() => router.push('/privacy')}>Privacy Policy</Text>
+                  <Text style={{ color: '#D64545' }}> *</Text>
+                </Text>
+              </Checkbox>
+              {errors.acceptTerms ? <Text style={styles.error}>{errors.acceptTerms}</Text> : null}
+            </View>
+
+            {formError ? <Text style={styles.error}>{formError}</Text> : null}
             <Button label="Continue" onPress={submit} loading={busy} />
 
             <Text style={styles.switch}>
@@ -106,7 +126,9 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 22, color: colors.text },
   title: { fontSize: 30, lineHeight: 36, color: colors.text },
   subtitle: { fontSize: 13, color: colors.muted },
-  link: { fontSize: 13, fontWeight: '700', color: colors.primary },
-  formError: { fontSize: 13, color: '#D64545' },
+  legend: { fontSize: 12, color: colors.muted },
+  terms: { fontSize: 13, lineHeight: 19, color: colors.text },
+  link: { fontWeight: '700', color: colors.primary },
+  error: { fontSize: 13, color: '#D64545' },
   switch: { fontSize: 13, textAlign: 'center', color: colors.muted },
 });

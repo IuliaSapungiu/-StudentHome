@@ -22,7 +22,7 @@ export function PropertyCard({ property, width, initiallySaved = false }: Props)
         {isVerified(property) && (
           <View style={styles.badge}>
             <Ionicons name="shield-checkmark-outline" size={13} color={colors.primary} />
-            <Text style={styles.badgeText}>{demo ? 'Verified · demo' : 'Verified'}</Text>
+            <Text style={styles.badgeText}>{demo ? 'Verified landlord · demo' : 'Verified landlord'}</Text>
           </View>
         )}
         {demo && <DemoTag style={styles.demo} />}

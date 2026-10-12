@@ -10,7 +10,6 @@ export type FeatureKey =
   | 'publicListing'
   | 'photos'
   | 'video'
-  | 'verifiedBadge'
   | 'higherRanking'
   | 'basicAnalytics'
   | 'advancedAnalytics'

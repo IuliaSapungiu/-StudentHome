@@ -43,7 +43,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test:logic": "tsx src/features/plans/plans.test.ts && tsx src/data/repository.test.ts && tsx src/features/session/session.test.ts"
+    "test:logic": "tsx src/features/plans/plans.test.ts && tsx src/features/plans/catalog.test.ts && tsx src/data/repository.test.ts && tsx src/features/session/session.test.ts && tsx src/features/session/accountMigration.test.ts && tsx src/features/validation/validation.test.ts && tsx src/features/verification/verification.test.ts && tsx src/features/forms/forms.test.ts && tsx src/architecture.test.ts"
   },
   "private": true
 }

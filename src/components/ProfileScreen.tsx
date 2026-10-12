@@ -4,9 +4,13 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '@/theme';
 import { Button } from '@/components/Button';
+import { StatusPill } from '@/components/StatusPill';
+import { VerificationBanner } from '@/components/VerificationBanner';
+import { demoVerificationEnabled } from '@/config/demo';
 import { ContentContainer } from '@/components/ContentContainer';
 import { useSession } from '@/features/session/SessionProvider';
-import { getModeAction, homeRouteFor, initialsFor } from '@/features/session/sessionLogic';
+import { fullNameOf, getModeAction, homeRouteFor, initialsFor } from '@/features/session/sessionLogic';
+import { useVerification } from '@/features/verification/VerificationProvider';
 import type { Mode } from '@/features/session/types';
 
 type Row = { icon: keyof typeof Ionicons.glyphMap; label: string };
@@ -42,6 +46,7 @@ const PROVIDER_ROWS: Row[][] = [
 export function ProfileScreen({ mode }: { mode: Mode }) {
   const router = useRouter();
   const { user, logout, switchMode, becomeProvider } = useSession();
+  const verification = useVerification();
   if (!user) return null;
 
   const action = getModeAction(user, mode);
@@ -75,14 +80,29 @@ export function ProfileScreen({ mode }: { mode: Mode }) {
                 <Text style={styles.avatarText}>{initialsFor(user)}</Text>
               </View>
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={styles.name} numberOfLines={1}>{user.displayName ?? user.email}</Text>
-                {user.displayName ? <Text style={styles.email} numberOfLines={1}>{user.email}</Text> : null}
+                <Text style={styles.name} numberOfLines={1}>{fullNameOf(user) ?? user.email}</Text>
+                {fullNameOf(user) ? <Text style={styles.email} numberOfLines={1}>{user.email}</Text> : null}
+                {user.phone ? <Text style={styles.email} numberOfLines={1}>{user.phone}</Text> : null}
                 <View style={styles.roleRow}>
                   <Ionicons name="shield-outline" size={13} color={colors.primary} />
                   <Text style={styles.role}>{mode === 'provider' ? 'Landlord profile' : 'Student profile'}</Text>
                 </View>
               </View>
             </View>
+          </View>
+
+          {verification.emailStatus !== 'verified' && verification.simulated && <VerificationBanner />}
+
+          <View style={styles.card}>
+            <View style={styles.verifyRow}>
+              <Text style={styles.menuLabel}>Email</Text>
+              <StatusPill status={verification.emailStatus} simulated={verification.simulated} />
+            </View>
+            <View style={[styles.verifyRow, styles.menuDivider]}>
+              <Text style={styles.menuLabel}>Phone</Text>
+              <StatusPill status={verification.phoneStatus} simulated={verification.simulated} />
+            </View>
+            <Text style={styles.verifyNote}>We verify your phone by SMS only when you first request a viewing or send a rental application.</Text>
           </View>
 
           {action && <Button variant="dark" label={action.label} onPress={onModeAction} />}
@@ -101,6 +121,7 @@ export function ProfileScreen({ mode }: { mode: Mode }) {
             </View>
           ))}
 
+          {demoVerificationEnabled && <Button variant="outline" label="Demo controls (simulated verification)" onPress={() => router.push('/demo-controls')} />}
           <Button variant="outline" label="Log out" onPress={onLogout} />
           <Text style={styles.footer}>StudentHouse · Prototype</Text>
         </ContentContainer>
@@ -120,6 +141,8 @@ const styles = StyleSheet.create({
   email: { fontSize: 12, color: colors.muted },
   roleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   role: { fontSize: 12, color: colors.primary },
+  verifyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
+  verifyNote: { fontSize: 11, color: colors.muted, paddingBottom: 12 },
   menuRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 14 },
   menuDivider: { borderTopWidth: 1, borderTopColor: colors.border },
   menuIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' },

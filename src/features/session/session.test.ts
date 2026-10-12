@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict';
 import { DEMO_ACCOUNTS } from '../../demo/demoAccounts';
 import {
-  becomeProvider, canSwitchModes, createUser, getModeAction, greetingFor, homeRouteFor, initialsFor,
-  normalizeEmail, parseUser, sessionReducer, switchMode,
+  becomeProvider, canSwitchModes, createUser, fullNameOf, getModeAction, greetingFor, homeRouteFor, initialsFor,
+  normalizeEmail, normalizeUser, parseUser, resolveActiveMode, sessionReducer, switchMode, TERMS_VERSION,
 } from './sessionLogic';
 import { validateEmail, validateLoginPassword, validateNewPassword } from './validation';
 
@@ -55,7 +55,10 @@ assert.equal(initialsFor(student), 'S');
 assert.deepEqual(parseUser(JSON.parse(JSON.stringify(both))), both);
 assert.equal(parseUser(null), null);
 assert.equal(parseUser({ id: 'x' }), null);
-assert.equal(parseUser({ ...student, activeMode: 'provider' }), null); // active mode must exist
+// A stored active mode the account does not have is repaired (never deletes the account)
+assert.equal(parseUser({ ...student, activeMode: 'provider' })?.activeMode, 'student');
+assert.equal(parseUser({ ...landlord, activeMode: 'student' })?.activeMode, 'provider');
+assert.equal(parseUser({ ...both, activeMode: 'nonsense' })?.activeMode, 'student');
 assert.equal(parseUser({ ...student, profiles: { student: false, provider: null } }), null);
 assert.equal(parseUser({ ...student, profiles: { student: 'yes', provider: null } }), null);
 
@@ -71,5 +74,22 @@ for (const a of DEMO_ACCOUNTS) {
   assert.ok(parseUser(JSON.parse(JSON.stringify(a.user))));
 }
 assert.equal(getModeAction(DEMO_ACCOUNTS[1].user, 'provider'), null);
+
+// Account details (Step 3a)
+const detailed = createUser('Ana@X.com', 'both', 'u9', { fullName: '  Ana Popescu ', phone: '+40712345678', termsAcceptedAt: '2026-10-12T10:00:00.000Z', termsVersion: TERMS_VERSION });
+assert.deepEqual([detailed.fullName, detailed.phone, detailed.termsVersion], ['Ana Popescu', '+40712345678', 'demo-0']);
+assert.equal(student.phone, null);
+assert.equal(fullNameOf(detailed), 'Ana Popescu');
+assert.equal(fullNameOf({ ...student, displayName: 'Old Name' }), 'Old Name'); // legacy name still readable
+assert.equal(fullNameOf({ ...student, fullName: 'New Name', displayName: 'Old Name' }), 'New Name');
+assert.equal(greetingFor(detailed), 'Welcome back, Ana');
+assert.equal(greetingFor(null), 'Welcome to StudentHouse'); // guests keep the welcome wording
+
+// activeMode is always resolved against the profiles the account has
+assert.equal(resolveActiveMode({ profiles: student.profiles, activeMode: 'provider' }), 'student');
+assert.equal(resolveActiveMode({ profiles: landlord.profiles, activeMode: 'student' }), 'provider');
+assert.equal(resolveActiveMode({ profiles: both.profiles, activeMode: 'provider' }), 'provider');
+assert.equal(normalizeUser({ ...student, activeMode: 'provider' }).activeMode, 'student');
+assert.equal(normalizeUser(both), both); // already valid: unchanged
 
 console.log('session: all checks passed');

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { getPlanEligibility, type ResidenceBusinessThreshold, PROVIDER_PLAN_RULES } from './eligibility';
 import { getPlanQuote } from './pricing';
-import { photoLimit, planIncludes } from './plans';
+import { PLANS, photoLimit, planIncludes } from './plans';
 import type { PlanId, ProviderType } from './types';
 
 const eligible = (t: ProviderType, n: number, rooms?: number) =>
@@ -54,8 +54,8 @@ assert.equal(getPlanQuote('basic', 2.5).kind, 'contact_us');
 assert.equal(photoLimit('basic'), 6);
 assert.equal(photoLimit('premium'), 15);
 assert.equal(photoLimit('business'), Infinity);
-assert.equal(planIncludes('basic', 'verifiedBadge'), false);
-assert.equal(planIncludes('premium', 'verifiedBadge'), true);
+// The "Verified landlord" badge is NOT a plan feature (it depends on the landlord's verification status)
+for (const plan of Object.values(PLANS)) assert.equal('verifiedBadge' in plan.features, false);
 assert.equal(planIncludes('premium', 'viewingCoordination'), false);
 assert.equal(planIncludes('managed_booking', 'viewingCoordination'), true);
 assert.equal(planIncludes('managed_booking', 'multipleProperties'), false); // paid add-on, not included

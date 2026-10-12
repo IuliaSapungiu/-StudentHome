@@ -6,7 +6,7 @@ export const isPublic = (p: Property) => p.status === 'published';
 
 export const isDemo = (p: Property) => p.source === 'demo';
 
-/** Verified is a plan feature - it is never a free-floating flag on a listing. */
-export const isVerified = (p: Property) => p.planId !== null && planIncludes(p.planId, 'verifiedBadge');
+/** "Verified landlord": depends on the landlord's identity verification, never on the plan. Not property verification. */
+export const isVerified = (p: Property) => p.landlordIdentityVerified;
 
 export const hasHigherRanking = (p: Property) => p.planId !== null && planIncludes(p.planId, 'higherRanking');

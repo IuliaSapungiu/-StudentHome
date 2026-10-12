@@ -1,10 +1,10 @@
 /// <reference types="node" />
 import assert from 'node:assert/strict';
 import { createMockPropertyRepository } from './mockRepository';
-import { DEMO_PROPERTIES } from './mockProperties';
+import { DEMO_OWNER_IDENTITY, DEMO_PROPERTIES } from './mockProperties';
 import { isVerified } from './listing';
 import { photoLimit } from '../features/plans/plans';
-import type { Property } from './types';
+import type { PropertyRecord } from './types';
 
 (async () => {
   assert.ok(DEMO_PROPERTIES.length >= 8 && DEMO_PROPERTIES.length <= 12);
@@ -19,9 +19,18 @@ import type { Property } from './types';
   const all = await repo.search();
   assert.equal(all.length, DEMO_PROPERTIES.length);
 
-  // Verified only where the plan includes it
-  for (const p of all) assert.equal(isVerified(p), p.planId !== 'basic');
-  assert.ok((await repo.search({ verifiedOnly: true })).every((p) => p.planId !== 'basic'));
+  // "Verified landlord" follows the landlord's identity verification, never the plan
+  for (const p of all) assert.equal(isVerified(p), DEMO_OWNER_IDENTITY[p.ownerId] === 'verified');
+  assert.ok(all.some((p) => p.planId === 'basic' && isVerified(p)), 'a Basic listing can have a verified landlord');
+  assert.ok(all.some((p) => p.planId === 'premium' && !isVerified(p)), 'a Premium listing can have an unverified landlord');
+  const verifiedOnly = await repo.search({ verifiedOnly: true });
+  assert.ok(verifiedOnly.length > 0 && verifiedOnly.every((p) => DEMO_OWNER_IDENTITY[p.ownerId] === 'verified'));
+  // Only the identity of the owner is represented: pending / more-info owners are not verified
+  assert.ok(all.filter((p) => ['pending', 'more_info_required'].includes(DEMO_OWNER_IDENTITY[p.ownerId])).every((p) => !isVerified(p)));
+  // A repository fed different owner statuses changes the badge without touching listings or plans
+  const flipped = createMockPropertyRepository(DEMO_PROPERTIES, { ...DEMO_OWNER_IDENTITY, 'demo-owner-3': 'verified' });
+  assert.ok((await flipped.getById('demo-3'))?.landlordIdentityVerified === true);
+  assert.ok((await repo.getById('demo-3'))?.landlordIdentityVerified === false);
 
   // Higher-ranking plans come first in "recommended"
   const rec = await repo.search();
@@ -46,8 +55,8 @@ import type { Property } from './types';
   assert.equal(cities.reduce((n, c) => n + c.homeCount, 0), DEMO_PROPERTIES.length);
 
   // Drafts and expired listings can never leak into the public feed
-  const draft: Property = { ...DEMO_PROPERTIES[0], id: 'user-1', source: 'user', status: 'draft', planId: null };
-  const expired: Property = { ...DEMO_PROPERTIES[1], id: 'user-2', source: 'user', status: 'expired' };
+  const draft: PropertyRecord = { ...DEMO_PROPERTIES[0], id: 'user-1', source: 'user', status: 'draft', planId: null };
+  const expired: PropertyRecord = { ...DEMO_PROPERTIES[1], id: 'user-2', source: 'user', status: 'expired' };
   const mixed = createMockPropertyRepository([...DEMO_PROPERTIES, draft, expired]);
   assert.equal((await mixed.search()).length, DEMO_PROPERTIES.length);
   assert.equal(await mixed.getById('user-1'), null);

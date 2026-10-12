@@ -1,14 +1,19 @@
 import { filterProperties } from './filterProperties';
 import { isPublic } from './listing';
-import { DEMO_CITY_IMAGES, DEMO_PROPERTIES } from './mockProperties';
+import { DEMO_CITY_IMAGES, DEMO_OWNER_IDENTITY, DEMO_PROPERTIES } from './mockProperties';
 import type { PropertyRepository } from './repository';
-import type { CitySummary, Property } from './types';
+import type { CitySummary, OwnerIdentityStatuses, Property, PropertyRecord } from './types';
 
 const FALLBACK_CITY_IMAGE = 'https://picsum.photos/seed/city-default/600/500';
 
-export function createMockPropertyRepository(source: Property[] = DEMO_PROPERTIES): PropertyRepository {
+export function createMockPropertyRepository(
+  source: PropertyRecord[] = DEMO_PROPERTIES,
+  ownerIdentity: OwnerIdentityStatuses = DEMO_OWNER_IDENTITY,
+): PropertyRepository {
+  // Compose the read model: "Verified landlord" comes from the owner's identity record.
+  const toReadModel = (r: PropertyRecord): Property => ({ ...r, landlordIdentityVerified: ownerIdentity[r.ownerId] === 'verified' });
   // Even if drafts are passed in, they can never be returned from here.
-  const publicOnly = () => source.filter(isPublic);
+  const publicOnly = (): Property[] => source.map(toReadModel).filter(isPublic);
 
   return {
     async search(query) {
