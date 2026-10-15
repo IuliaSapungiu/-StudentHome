@@ -6,7 +6,12 @@ import type { VerificationKind, VerificationStatus } from '../features/verificat
 // DEMO ONLY. Writes SIMULATED verification records so every state can be tested without real
 // documents, SMS or paid services. Every record it writes is flagged `simulated: true`.
 // It refuses to do anything unless demo verification is enabled.
-type Options = { store: VerificationStore; enabled: () => boolean; now?: () => number };
+type Options = {
+  store: VerificationStore;
+  enabled: () => boolean;
+  now?: () => number;
+  verificationService?: { resetChallengeForUser?: (userId: string) => void };
+};
 
 const REASONS: Partial<Record<VerificationStatus, string>> = {
   rejected: 'Rejected in the demo simulator. In production a reviewer or provider decides this.',
@@ -14,7 +19,7 @@ const REASONS: Partial<Record<VerificationStatus, string>> = {
   more_info_required: 'More information required (simulated). In production we would say exactly what is missing.',
 };
 
-export function createDemoVerificationControls({ store, enabled, now = Date.now }: Options) {
+export function createDemoVerificationControls({ store, enabled, now = Date.now, verificationService }: Options) {
   return {
     async setStatus(
       userId: string,
@@ -47,12 +52,14 @@ export function createDemoVerificationControls({ store, enabled, now = Date.now 
     async seedDemoAccount(user: MockUser): Promise<boolean> {
       if (!enabled()) return false;
       await store.removeForUser(user.id);
+      verificationService?.resetChallengeForUser?.(user.id);
       return this.setStatus(user.id, 'email', 'verified', { value: user.email });
     },
 
     async reset(userId: string): Promise<boolean> {
       if (!enabled()) return false;
       await store.removeForUser(userId);
+      verificationService?.resetChallengeForUser?.(userId);
       return true;
     },
   };

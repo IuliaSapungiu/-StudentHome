@@ -25,6 +25,7 @@ export function PhoneVerificationSheet({ visible, onClose, onVerified }: Props) 
   useEffect(() => {
     if (visible) {
       setStep('intro'); setCode(''); setError(null); setHint(null); setBusy(false); setRetryAt(null); setPhoneInput('');
+      setNow(Date.now());
     }
   }, [visible]);
 
@@ -52,13 +53,15 @@ export function PhoneVerificationSheet({ visible, onClose, onVerified }: Props) 
     }
     const res = await v.startPhoneVerification(target);
     setBusy(false);
+    const currentTime = Date.now();
+    setNow(currentTime);
     if (res.ok) {
       setStep('code');
       setHint(res.value.demoHint ?? null);
-      setRetryAt(Date.now() + 30000);
+      setRetryAt(currentTime + 30000);
     } else {
       setError(res.error.message);
-      if (res.error.retryAfterMs) setRetryAt(Date.now() + res.error.retryAfterMs);
+      if (res.error.retryAfterMs) setRetryAt(currentTime + res.error.retryAfterMs);
     }
   };
 
