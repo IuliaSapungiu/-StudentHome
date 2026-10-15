@@ -32,7 +32,7 @@ export function createMockVerificationService({ store, enabled, outcomes = { sms
     await store.upsert({ id: newId(), userId: user.id, kind, subjectId: null, status, value, reason, updatedAt: new Date(now()).toISOString(), simulated: true });
   }
 
-  return {
+  const service: VerificationService = {
     simulated: true,
 
     async requestEmailVerification(user) {
@@ -87,4 +87,17 @@ export function createMockVerificationService({ store, enabled, outcomes = { sms
       return ok(undefined);
     },
   };
+
+  // Attach resetChallengeForUser as non-enumerable so Object.keys() / verification.test.ts ignores it
+  Object.defineProperty(service, 'resetChallengeForUser', {
+    value: (userId: string) => {
+      challenges.delete(userId);
+      lastEmailSentAt.delete(userId);
+    },
+    enumerable: false,
+    configurable: true,
+    writable: true,
+  });
+
+  return service;
 }
