@@ -23,6 +23,7 @@
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
+    "react-native-maps": "1.27.2",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
@@ -43,7 +44,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test:logic": "tsx src/features/plans/plans.test.ts && tsx src/features/plans/catalog.test.ts && tsx src/data/repository.test.ts && tsx src/features/session/session.test.ts && tsx src/features/session/accountMigration.test.ts && tsx src/features/validation/validation.test.ts && tsx src/features/verification/verification.test.ts && tsx src/features/forms/forms.test.ts && tsx src/architecture.test.ts"
+    "test:logic": "tsx src/features/plans/plans.test.ts && tsx src/features/plans/catalog.test.ts && tsx src/data/repository.test.ts && tsx src/features/session/session.test.ts && tsx src/features/session/accountMigration.test.ts && tsx src/features/validation/validation.test.ts && tsx src/features/verification/verification.test.ts && tsx src/features/forms/forms.test.ts && tsx src/features/currency/currency.test.ts && tsx src/features/search/search.test.ts && tsx src/features/map/map.test.ts && tsx src/features/saved/saved.test.ts && tsx src/theme/responsive.test.ts && tsx src/architecture.test.ts"
   },
   "private": true
 }

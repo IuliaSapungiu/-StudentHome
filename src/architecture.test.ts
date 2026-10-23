@@ -50,17 +50,31 @@ const PURE = [
   /^features\/verification\/(types|verificationRules|verificationRepository|mockVerificationStore|verificationService|mockVerificationService)\.ts$/,
   /^data\/(types|listing|format|filterProperties|repository|mockRepository|mockProperties)\.ts$/,
   /^demo\/(demoAccounts|demoVerificationControls)\.ts$/,
+  // Step 3b: currency, search, map and saved-homes logic, and the layout rules, are pure
+  /^features\/currency\//,
+  /^features\/search\/(budget|rangeSlider|searchState|presets|params)\.ts$/,
+  /^features\/map\/mapLogic\.ts$/,
+  /^features\/saved\/savedLogic\.ts$/,
+  /^theme\/responsive\.ts$/,
 ];
 const pureFiles = files.filter((f) => PURE.some((r) => r.test(rel(f))));
-assert.ok(pureFiles.length >= 30, `expected many pure files, found ${pureFiles.length}`);
+assert.ok(pureFiles.length >= 45, `expected many pure files, found ${pureFiles.length}`);
 const pureViolations: string[] = [];
 for (const file of pureFiles) {
   for (const spec of importsOf(file)) {
-    if (/^(react|react-native|expo|expo-.*|@expo\/.*|@react-native.*)$/.test(spec) || spec.startsWith('@/') || /mockStorage$/.test(spec)) {
+    if (/^(react|react-native|react-native-.*|expo|expo-.*|@expo\/.*|@react-native.*)$/.test(spec) || spec.startsWith('@/') || /mockStorage$/.test(spec)) {
       pureViolations.push(`${rel(file)} imports ${spec}`);
     }
   }
 }
 assert.deepEqual(pureViolations, [], `Pure-logic violations:\n${pureViolations.join('\n')}`);
+
+// The native map library is confined to ONE component, which has a web fallback beside it, so the
+// rest of the app (and every pure module) stays free of it and works on web.
+const MAP_COMPONENT = 'components/map/PropertyMap.tsx';
+assert.ok(fs.existsSync(path.join(SRC, MAP_COMPONENT)), `stale map allow-list entry: ${MAP_COMPONENT}`);
+assert.ok(fs.existsSync(path.join(SRC, 'components/map/PropertyMap.web.tsx')), 'the map needs a .web.tsx fallback');
+const mapImporters = files.filter((f) => importsOf(f).some((spec) => spec === 'react-native-maps' || spec.startsWith('react-native-maps/'))).map(rel);
+assert.deepEqual(mapImporters, [MAP_COMPONENT], `only ${MAP_COMPONENT} may import react-native-maps, found: ${mapImporters.join(', ')}`);
 
 console.log(`architecture: all checks passed (${UI.length} UI files, ${pureFiles.length} pure files)`);

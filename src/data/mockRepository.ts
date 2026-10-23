@@ -1,23 +1,31 @@
+import { createDemoExchangeRateSource, type ExchangeRateSource } from '../features/currency/exchangeRate';
 import { filterProperties } from './filterProperties';
 import { isPublic } from './listing';
-import { DEMO_CITY_IMAGES, DEMO_OWNER_IDENTITY, DEMO_PROPERTIES } from './mockProperties';
+import { DEMO_CITY_IMAGES, DEMO_OWNERS, DEMO_OWNER_IDENTITY, DEMO_PROPERTIES } from './mockProperties';
 import type { PropertyRepository } from './repository';
-import type { CitySummary, OwnerIdentityStatuses, Property, PropertyRecord } from './types';
+import type { CitySummary, OwnerDirectory, OwnerIdentityStatuses, Property, PropertyRecord } from './types';
 
+const FALLBACK_OWNER = { displayName: 'Landlord', providerType: 'private_landlord' } as const;
 const FALLBACK_CITY_IMAGE = 'https://picsum.photos/seed/city-default/600/500';
 
 export function createMockPropertyRepository(
   source: PropertyRecord[] = DEMO_PROPERTIES,
   ownerIdentity: OwnerIdentityStatuses = DEMO_OWNER_IDENTITY,
+  owners: OwnerDirectory = DEMO_OWNERS,
+  rateSource: ExchangeRateSource = createDemoExchangeRateSource(),
 ): PropertyRepository {
-  // Compose the read model: "Verified landlord" comes from the owner's identity record.
-  const toReadModel = (r: PropertyRecord): Property => ({ ...r, landlordIdentityVerified: ownerIdentity[r.ownerId] === 'verified' });
+  // Compose the read model: "Verified landlord" comes from the owner's identity record, never the plan.
+  const toReadModel = (r: PropertyRecord): Property => ({
+    ...r,
+    landlordIdentityVerified: ownerIdentity[r.ownerId] === 'verified',
+    owner: owners[r.ownerId] ?? FALLBACK_OWNER,
+  });
   // Even if drafts are passed in, they can never be returned from here.
   const publicOnly = (): Property[] => source.map(toReadModel).filter(isPublic);
 
   return {
     async search(query) {
-      return filterProperties(publicOnly(), query);
+      return filterProperties(publicOnly(), query, rateSource.getRate());
     },
     async getById(id) {
       return publicOnly().find((p) => p.id === id) ?? null;
@@ -26,7 +34,7 @@ export function createMockPropertyRepository(
       return publicOnly().filter((p) => ids.includes(p.id));
     },
     async getFeatured(limit = 6) {
-      return filterProperties(publicOnly(), { sort: 'recommended' }).slice(0, limit);
+      return filterProperties(publicOnly(), { sort: 'recommended' }, rateSource.getRate()).slice(0, limit);
     },
     async getCities() {
       const counts = new Map<string, number>();

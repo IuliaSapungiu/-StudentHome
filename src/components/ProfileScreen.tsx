@@ -69,7 +69,7 @@ export function ProfileScreen({ mode }: { mode: Mode }) {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
         <ContentContainer maxWidth={640} style={{ gap: spacing.md }}>
           <Text style={styles.title}>Profile</Text>

@@ -1,16 +1,23 @@
 // Pure layout rules (no React) so they are easy to reason about and test.
-// Widths are in density-independent pixels (dp), as returned by useWindowDimensions().
+// Sizes are in density-independent pixels (dp), as returned by useWindowDimensions().
+//
+// The DEVICE CLASS comes from the SHORTEST side of the window (the Android "sw600dp" convention), so
+// a phone turned to landscape is still a phone, while a tablet stays a tablet in either orientation
+// (and a tablet in a narrow split-screen window is treated as a phone). The number of COLUMNS comes
+// from the current WIDTH, because that is the room actually available.
 
 export const breakpoints = {
-  smallPhone: 360, // below this: compact spacing
-  tablet: 600, // from here: tablet layout (most tablets in portrait, phones never)
-  largeTablet: 900, // from here: three columns (tablet landscape, large tablets)
+  smallPhone: 360, // shortest side below this: compact spacing
+  tablet: 600, // shortest side from here: tablet layout
+  phoneTwoColumns: 700, // phones: two grid columns once the width allows (landscape)
+  largeTablet: 900, // tablets: three columns from this width
 } as const;
 
 export type DeviceClass = 'phone' | 'tablet';
 
 export type Layout = {
   deviceClass: DeviceClass;
+  isLandscape: boolean;
   isSmallPhone: boolean;
   /** Number of columns for property grids. */
   columns: 1 | 2 | 3;
@@ -28,10 +35,17 @@ export type Layout = {
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-export function getLayout(width: number): Layout {
-  const isTablet = width >= breakpoints.tablet;
-  const isSmallPhone = width < breakpoints.smallPhone;
-  const columns = width >= breakpoints.largeTablet ? 3 : isTablet ? 2 : 1;
+export function getLayout(width: number, height: number = width): Layout {
+  const shortest = Math.min(width, height);
+  const isTablet = shortest >= breakpoints.tablet;
+  const isSmallPhone = shortest < breakpoints.smallPhone;
+  const columns: 1 | 2 | 3 = isTablet
+    ? width >= breakpoints.largeTablet
+      ? 3
+      : 2
+    : width >= breakpoints.phoneTwoColumns
+      ? 2
+      : 1;
   const gutter = isTablet ? 32 : isSmallPhone ? 16 : 24;
   const gap = isTablet ? 24 : 16;
   const contentMaxWidth = 1100;
@@ -40,6 +54,7 @@ export function getLayout(width: number): Layout {
 
   return {
     deviceClass: isTablet ? 'tablet' : 'phone',
+    isLandscape: width > height,
     isSmallPhone,
     columns,
     gutter,
