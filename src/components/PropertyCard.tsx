@@ -1,32 +1,42 @@
-import { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '@/theme';
-import { describeDetail, formatNumber, isDemo, isVerified, type Property } from '@/data';
+import { describeDetail, isDemo, isVerified, type Property } from '@/data';
 import { DemoTag } from '@/components/DemoTag';
-import { useRequireAccount } from '@/features/session/useRequireAccount';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { useSaved } from '@/features/saved/SavedProvider';
+import { useSearch } from '@/features/search/SearchProvider';
 
-type Props = { property: Property; width?: number; initiallySaved?: boolean };
+type Props = { property: Property; width?: number };
 
 // Large photo card used on Home (featured), Search and Saved.
 // Pass `width` for carousels; omit it to fill the parent (grids, lists).
-export function PropertyCard({ property, width, initiallySaved = false }: Props) {
-  const [saved, setSaved] = useState(initiallySaved);
+// The price follows the student's display currency; the heart is shared app-wide (see SavedProvider).
+export function PropertyCard({ property, width }: Props) {
+  const router = useRouter();
+  const { formatPrice } = useSearch();
+  const { isSaved, toggleSaved } = useSaved();
+  const saved = isSaved(property.id);
   const demo = isDemo(property);
-  const requireAccount = useRequireAccount();
+  const price = formatPrice(property.rent);
 
   return (
-    <View style={[styles.card, width ? { width } : null]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${property.title}, ${price} per month`}
+      onPress={() => router.push({ pathname: '/property/[id]', params: { id: property.id } })}
+      style={[styles.card, width ? { width } : null]}>
       <View>
         <Image source={{ uri: property.images[0] }} style={styles.image} />
-        {isVerified(property) && (
-          <View style={styles.badge}>
-            <Ionicons name="shield-checkmark-outline" size={13} color={colors.primary} />
-            <Text style={styles.badgeText}>{demo ? 'Verified landlord · demo' : 'Verified landlord'}</Text>
-          </View>
-        )}
+        {isVerified(property) && <VerifiedBadge demo={demo} style={styles.badge} />}
         {demo && <DemoTag style={styles.demo} />}
-        <Pressable onPress={() => requireAccount(() => setSaved((v) => !v))} style={[styles.heart, saved && styles.heartOn]} hitSlop={8}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={saved ? 'Remove from saved' : 'Save home'}
+          onPress={() => toggleSaved(property.id)}
+          style={[styles.heart, saved && styles.heartOn]}
+          hitSlop={8}>
           <Ionicons name={saved ? 'heart' : 'heart-outline'} size={20} color={saved ? '#fff' : colors.text} />
         </Pressable>
       </View>
@@ -37,17 +47,16 @@ export function PropertyCard({ property, width, initiallySaved = false }: Props)
       <Text style={styles.title} numberOfLines={1}>{property.title}</Text>
       <Text style={styles.meta}>{describeDetail(property)}</Text>
       <Text style={styles.price}>
-        {formatNumber(property.rentRon)} lei <Text style={styles.perMonth}>/ month</Text>
+        {price} <Text style={styles.perMonth}>/ month</Text>
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: { marginBottom: spacing.lg },
   image: { width: '100%', aspectRatio: 1.55, borderRadius: radius.lg, backgroundColor: colors.mint },
-  badge: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#fff', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
-  badgeText: { fontSize: 11, fontWeight: '600', color: colors.primary },
+  badge: { position: 'absolute', top: 10, left: 10 },
   demo: { position: 'absolute', bottom: 10, left: 10 },
   heart: { position: 'absolute', top: 10, right: 10, width: 38, height: 38, borderRadius: 19, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   heartOn: { backgroundColor: colors.primary },
