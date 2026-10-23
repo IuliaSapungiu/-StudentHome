@@ -38,7 +38,7 @@ export default function SearchScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { state, setState, setView, focusNonce, formatBudgetRon } = useSearch();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<React.ElementRef<typeof TextInput>>(null);
 
   // ---- Deep links such as /search?city=Cluj-Napoca (invalid values are ignored) ----
   const paramsKey = JSON.stringify(params);
@@ -131,7 +131,10 @@ export default function SearchScreen() {
               </Pressable>
             )}
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Filters${filterCount ? `, ${filterCount} active` : ''}`} onPress={() => router.push('/filters')} style={styles.filterBtn}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Filters${filterCount ? `, ${filterCount} active` : ''}`} onPress={() => {
+  inputRef.current?.blur();
+  router.push('/filters');
+}} style={styles.filterBtn}>
             <Ionicons name="options-outline" size={22} color="#fff" />
             {filterCount > 0 && (
               <View style={styles.badge}>
@@ -193,7 +196,13 @@ export default function SearchScreen() {
             keyboardShouldPersistTaps="handled"
             columnWrapperStyle={columns > 1 ? { gap: layout.gap } : undefined}
             contentContainerStyle={{ width: '100%', maxWidth: layout.contentMaxWidth, alignSelf: 'center', paddingHorizontal: layout.gutter, paddingTop: spacing.md, paddingBottom: 110 }}
-            ListHeaderComponent={showsDemoData ? <View style={{ marginBottom: spacing.md }}><DemoNotice /></View> : null}
+            ListHeaderComponent={
+                      showsDemoData ? (
+                        <View style={{ marginBottom: spacing.md }}>
+                          <DemoNotice />
+                        </View>
+                      ) : undefined
+                    }
             renderItem={({ item }) => <PropertyCard property={item} width={columns > 1 ? layout.gridItemWidth : undefined} />}
           />
         )}

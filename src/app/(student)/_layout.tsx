@@ -5,8 +5,13 @@ import { colors } from '@/theme';
 import { useSession } from '@/features/session/SessionProvider';
 
 const icon = (name: keyof typeof Ionicons.glyphMap) =>
-  ({ color, size }: { color: ColorValue; size: number }) => <Ionicons name={name} size={size} color={color} />;
-
+  ({ color, size }: { color: ColorValue | null; size: number }) => (
+    <Ionicons
+      name={name}
+      size={size}
+      color={typeof color === 'number' ? String(color) : color ?? undefined}
+    />
+  );
 // Bottom tabs of the student app: Home, Search, Saved, Messages, Profile.
 // Home and Search are open to guests. Saved, Messages and Profile need an account.
 export default function StudentTabs() {
