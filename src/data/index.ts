@@ -1,12 +1,19 @@
 import { dataSourceMode, demoDataEnabled, type DataSourceMode } from '../config/dataSource';
+import { exchangeRateSource } from '../config/currency';
+import type { ExchangeRateSource } from '../features/currency/exchangeRate';
+import { DEMO_OWNERS, DEMO_OWNER_IDENTITY, DEMO_PROPERTIES } from './mockProperties';
 import { createMockPropertyRepository } from './mockRepository';
 import type { PropertyRepository } from './repository';
 
-export function createPropertyRepository(mode: DataSourceMode, allowDemo: boolean): PropertyRepository {
+export function createPropertyRepository(
+  mode: DataSourceMode,
+  allowDemo: boolean,
+  rateSource: ExchangeRateSource = exchangeRateSource,
+): PropertyRepository {
   switch (mode) {
     case 'mock':
       // Demo data off (e.g. a release build) -> an empty feed, never silent demo listings.
-      return allowDemo ? createMockPropertyRepository() : createMockPropertyRepository([]);
+      return createMockPropertyRepository(allowDemo ? DEMO_PROPERTIES : [], DEMO_OWNER_IDENTITY, DEMO_OWNERS, rateSource);
     case 'supabase':
       throw new Error('The Supabase property repository is not implemented yet.');
   }
@@ -21,4 +28,13 @@ export const showsDemoData = dataSourceMode === 'mock' && demoDataEnabled;
 export type { PropertyRepository } from './repository';
 export * from './types';
 export { isDemo, isPublic, isVerified } from './listing';
-export { describeDetail, describeSize, formatRon, formatNumber } from './format';
+export {
+  describeAmenity,
+  describeAvailability,
+  describeDetail,
+  describeProviderType,
+  describePropertyType,
+  describeSize,
+  formatRon,
+  formatNumber,
+} from './format';

@@ -1,4 +1,5 @@
-import type { PlanId } from '../features/plans/types';
+import type { Money } from '../features/currency/types';
+import type { PlanId, ProviderType } from '../features/plans/types';
 import type { VerificationStatus } from '../features/verification/types';
 
 export type ListingStatus = 'draft' | 'ready_to_publish' | 'payment_successful' | 'published' | 'expired';
@@ -22,7 +23,10 @@ export type Property = {
   ownerId: string;
   source: ListingSource;
   status: ListingStatus;
-  /** Plan the listing is published under. Drives Verified badge and ranking. null for drafts. */
+  /**
+   * Plan the listing is published under. Drives ranking and plan features ONLY. It never drives the
+   * "Verified landlord" badge, which comes from the owner's identity verification. null for drafts.
+   */
   planId: PlanId | null;
   title: string;
   description: string;
@@ -32,10 +36,21 @@ export type Property = {
   /** 0 = studio. */
   bedrooms: number;
   bathrooms: number;
-  rentRon: number;
-  depositRon: number;
+  /**
+   * The landlord's ORIGINAL monthly rent and deposit, each with its own currency (RON or EUR).
+   * Never assume RON. These are never overwritten by the student's display currency: converted
+   * values are computed at read time (src/features/currency/money.ts) and are not stored.
+   */
+  rent: Money;
+  deposit: Money;
   amenities: Amenity[];
   images: string[];
+  /**
+   * APPROXIMATE area-level position for map display (rounded to about 100 m). It is deliberately not
+   * the exact address and must never be presented as a verified property location. Optional: listings
+   * without it are simply left off the map.
+   */
+  approxLocation?: { latitude: number; longitude: number };
   /** ISO date (YYYY-MM-DD). */
   availableFrom: string;
   nearestUniversity: { name: string; minutes: number };
@@ -44,10 +59,17 @@ export type Property = {
    * It is not stored on the property. It says nothing about the property itself being verified.
    */
   landlordIdentityVerified: boolean;
+  /** READ-MODEL FIELD: who is offering the property (display name and provider type). */
+  owner: OwnerSummary;
 };
 
+/** Public information about the provider shown on a listing. */
+export type OwnerSummary = { displayName: string; providerType: ProviderType };
+
+export type OwnerDirectory = Record<string, OwnerSummary>;
+
 /** What is stored for a property (the read model minus fields derived at read time). */
-export type PropertyRecord = Omit<Property, 'landlordIdentityVerified'>;
+export type PropertyRecord = Omit<Property, 'landlordIdentityVerified' | 'owner'>;
 
 export type OwnerIdentityStatuses = Record<string, VerificationStatus>;
 
@@ -61,12 +83,18 @@ export type PropertySearchQuery = {
   city?: string;
   /** University short name, e.g. "ASE". */
   university?: string;
+  /**
+   * Budget limits as RON-EQUIVALENT amounts. A listing priced in EUR is converted with the current
+   * exchange-rate snapshot before it is compared, so filtering is identical whatever display
+   * currency the student has chosen. Search state keeps the limits in this form.
+   */
   minRentRon?: number;
   maxRentRon?: number;
   types?: PropertyType[];
   /** 0 = studio; 3 means "3 or more". Multiple values are OR-ed. */
   bedrooms?: number[];
   minBathrooms?: number;
+  maxBathrooms?: number;
   maxMinutesToUniversity?: number;
   /** Every listed amenity must be present. */
   amenities?: Amenity[];

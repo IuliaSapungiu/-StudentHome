@@ -1,4 +1,4 @@
-// Five distinct kinds of verification. Completing one never implies any other.
+// Six distinct kinds of verification. Completing one never implies any other.
 export type VerificationKind =
   | 'email'
   | 'phone'
