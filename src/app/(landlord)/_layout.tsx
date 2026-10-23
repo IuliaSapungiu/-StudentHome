@@ -5,8 +5,13 @@ import { colors } from '@/theme';
 import { useSession } from '@/features/session/SessionProvider';
 
 const icon = (name: keyof typeof Ionicons.glyphMap) =>
-  ({ color, size }: { color: ColorValue; size: number }) => <Ionicons name={name} size={size} color={color} />;
-
+  ({ color, size }: { color: ColorValue | null; size: number }) => (
+    <Ionicons
+      name={name}
+      size={size}
+      color={typeof color === 'number' ? String(color) : color ?? undefined}
+    />
+  );
 // Landlord / provider mode: Dashboard, Listings, Messages, Viewings, Profile.
 export default function LandlordTabs() {
   const { status, user } = useSession();
