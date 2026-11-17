@@ -1,5 +1,5 @@
-// Temporary, in-memory "saved homes" rules for Step 3b. Pure. Persistence and the Saved screen
-// arrive in a later step; until then saved ids live only for the running app session.
+// "Saved homes" rules. Pure. Persistence sits behind SavedRepository (Step 3c); the in-memory state in
+// SavedProvider is just the loaded copy.
 
 /** user id -> saved property ids, most recently saved first. */
 export type SavedByUser = Record<string, string[]>;
@@ -14,4 +14,12 @@ export function toggleSaved(state: SavedByUser, userId: string, propertyId: stri
   const current = state[userId] ?? [];
   const next = current.includes(propertyId) ? current.filter((id) => id !== propertyId) : [propertyId, ...current];
   return { ...state, [userId]: next };
+}
+
+/** Idempotent version of toggleSaved: makes the property saved (or not saved) and never duplicates it. */
+export function setSaved(state: SavedByUser, userId: string, propertyId: string, saved: boolean): SavedByUser {
+  const current = state[userId] ?? [];
+  const has = current.includes(propertyId);
+  if (saved === has) return state;
+  return { ...state, [userId]: saved ? [propertyId, ...current] : current.filter((id) => id !== propertyId) };
 }

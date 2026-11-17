@@ -1,4 +1,5 @@
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { PropertyImage } from '@/components/PropertyImage';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '@/theme';
@@ -28,7 +29,7 @@ export function PropertyCard({ property, width }: Props) {
       onPress={() => router.push({ pathname: '/property/[id]', params: { id: property.id } })}
       style={[styles.card, width ? { width } : null]}>
       <View>
-        <Image source={{ uri: property.images[0] }} style={styles.image} />
+        <PropertyImage uri={property.images[0]} style={styles.image} accessibilityLabel={`Photo of ${property.title}`} />
         {isVerified(property) && <VerifiedBadge demo={demo} style={styles.badge} />}
         {demo && <DemoTag style={styles.demo} />}
         <Pressable

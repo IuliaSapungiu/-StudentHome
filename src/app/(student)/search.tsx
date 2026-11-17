@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '@/theme';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -15,6 +15,7 @@ import { EmptyResults } from '@/components/search/EmptyResults';
 import { SortMenu } from '@/components/search/SortMenu';
 import { ViewToggle } from '@/components/search/ViewToggle';
 import { useSearch } from '@/features/search/SearchProvider';
+import { focusActionOnArrival } from '@/features/search/searchRequests';
 import { searchStateFromParams, parseSearchParams } from '@/features/search/params';
 import {
   QUICK_BUDGET_RON,
@@ -37,7 +38,7 @@ export default function SearchScreen() {
   const layout = useResponsive();
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { state, setState, setView, focusNonce, formatBudgetRon } = useSearch();
+  const { state, setState, setView, focusRequested, consumeFocusRequest, scrollResetToken, formatBudgetRon } = useSearch();
   const inputRef = useRef<React.ElementRef<typeof TextInput>>(null);
 
   // ---- Deep links such as /search?city=Cluj-Napoca (invalid values are ignored) ----
@@ -62,9 +63,21 @@ export default function SearchScreen() {
     typed.current = false;
     setState((prev) => ({ ...prev, text: debouncedText }));
   }, [debouncedText, setState]);
-  useEffect(() => {
-    if (focusNonce > 0) inputRef.current?.focus();
-  }, [focusNonce]);
+  // Keyboard: only a pending request from Home's search bar opens it, and it is used up at once. Every other arrival
+  // (back from Filters, list or map mode) leaves the keyboard closed; the field can still be tapped as usual.
+  const focusRequestedRef = useRef(focusRequested);
+  focusRequestedRef.current = focusRequested;
+  useFocusEffect(
+    useCallback(() => {
+      if (focusActionOnArrival({ focusRequested: focusRequestedRef.current, scrollResetToken: 0 }) === 'focus') {
+        inputRef.current?.focus();
+        consumeFocusRequest();
+      } else {
+        inputRef.current?.blur();
+        Keyboard.dismiss();
+      }
+    }, [consumeFocusRequest]),
+  );
 
   // ---- Results: ONE array feeds the count, the list and the map ----
   const key = queryKey(state);
@@ -189,7 +202,7 @@ export default function SearchScreen() {
           />
         ) : (
           <FlatList
-            key={columns}
+            key={`${columns}-${scrollResetToken}`} // a new search from a preset starts at the top of the list
             data={shown}
             numColumns={columns}
             keyExtractor={(p) => p.id}

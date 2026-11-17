@@ -23,7 +23,7 @@ const files = walk(SRC);
 const UI = files.filter((f) => /^(app|components|hooks)\//.test(rel(f)));
 
 // UI files allowed to import the demo-only module (each is gated by a flag in src/config/demo.ts).
-const DEMO_ALLOWED = new Set(['app/(auth)/login.tsx', 'app/(auth)/verify-email.tsx', 'app/demo-controls.tsx']);
+const DEMO_ALLOWED = new Set(['app/(auth)/login.tsx', 'app/(auth)/verify-email.tsx', 'app/demo-controls.tsx', 'app/demo-landlord.tsx']);
 for (const f of DEMO_ALLOWED) assert.ok(fs.existsSync(path.join(SRC, f)), `stale allow-list entry: ${f}`);
 
 const violations: string[] = [];
@@ -56,6 +56,16 @@ const PURE = [
   /^features\/map\/mapLogic\.ts$/,
   /^features\/saved\/savedLogic\.ts$/,
   /^theme\/responsive\.ts$/,
+  // Step 3c: shared building blocks, saved/messaging/viewing/application logic and mock repositories, demo seed and responder
+  /^features\/shared\//,
+  /^features\/saved\/(savedRepository|mockSavedRepository)\.ts$/,
+  /^features\/messaging\/(types|messagingLogic|conversationRepository|mockConversationRepository)\.ts$/,
+  /^features\/viewings\/(types|viewingRules|viewingRepository|mockViewingRepository)\.ts$/,
+  /^features\/applications\/(types|applicationRules|applicationRepository|mockApplicationRepository)\.ts$/,
+  /^features\/verification\/(accessChecker|submitFlow)\.ts$/,
+  /^features\/notifications\/(types|notificationLogic|notificationRepository|mockNotificationRepository)\.ts$/,
+  /^data\/mockAddresses\.ts$/,
+  /^demo\/(demoCommunication|demoLandlord)\.ts$/,
 ];
 const pureFiles = files.filter((f) => PURE.some((r) => r.test(rel(f))));
 assert.ok(pureFiles.length >= 45, `expected many pure files, found ${pureFiles.length}`);

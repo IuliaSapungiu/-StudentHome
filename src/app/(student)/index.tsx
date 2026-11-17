@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { PropertyImage } from '@/components/PropertyImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -122,7 +123,7 @@ export default function HomeScreen() {
                 contentContainerStyle={{ paddingHorizontal: layout.gutter, gap: layout.gap }}
                 renderItem={({ item }) => (
                   <Pressable accessibilityRole="button" accessibilityLabel={`Homes in ${item.name}`} onPress={() => openSearch(presetCity(item.name))}>
-                    <Image source={{ uri: item.image }} style={styles.cityImage} />
+                    <PropertyImage uri={item.image} style={styles.cityImage} />
                     <Text style={styles.cityName}>{item.name}</Text>
                     <Text style={styles.cityHomes}>{formatNumber(item.homeCount)} homes</Text>
                   </Pressable>
@@ -140,7 +141,7 @@ export default function HomeScreen() {
                   onPress={() => router.push({ pathname: '/property/[id]', params: { id: p.id } })}
                   style={[styles.listRow, { width: layout.gridItemWidth }]}>
                   <View>
-                    <Image source={{ uri: p.images[0] }} style={styles.thumb} />
+                    <PropertyImage compact uri={p.images[0]} style={styles.thumb} />
                     {isVerified(p) && <VerifiedBadge variant="shield" demo={isDemo(p)} style={styles.thumbBadge} />}
                   </View>
                   <View style={{ flex: 1, gap: 2 }}>
