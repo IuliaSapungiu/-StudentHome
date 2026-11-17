@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { DateTimePicker } from '@expo/ui/community/datetime-picker';
@@ -126,6 +126,7 @@ export default function FiltersScreen() {
     }
     setState({ ...draft, budget: r.budget });
     setCurrency(draftCurrency);
+    Keyboard.dismiss(); // the keyboard stays closed when the results appear
     router.navigate('/search');
   };
 

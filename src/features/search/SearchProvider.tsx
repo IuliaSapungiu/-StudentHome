@@ -16,8 +16,11 @@ type SearchContextValue = {
   setView: (view: SearchView) => void;
   /** Starts a fresh search from a Home preset (replacing earlier filters). `focus` asks Search to focus its text field. */
   applyPreset: (preset: SearchPreset, opts?: { focus?: boolean }) => void;
-  /** Incremented whenever Search should focus its text field. */
-  focusNonce: number;
+  /** True until Search has acted on it: "open the keyboard on arrival" (see searchRequests.ts). */
+  focusRequested: boolean;
+  consumeFocusRequest: () => void;
+  /** Changes only when a new search is started from a preset; Search starts its list at the top for each value. */
+  scrollResetToken: number;
 
   /** Display currency for every price shown to a student. RON by default. */
   currency: Currency;
@@ -34,10 +37,12 @@ type SearchContextValue = {
 
 const SearchContext = createContext<SearchContextValue | null>(null);
 
+import { consumeFocus, initialSearchRequests, onPresetApplied, type SearchRequests } from './searchRequests';
+
 export function SearchProvider({ children }: { children: ReactNode }) {
   const [state, setStateRaw] = useState<SearchState>(defaultSearchState);
   const [currency, setCurrency] = useState<Currency>(DEFAULT_DISPLAY_CURRENCY);
-  const [focusNonce, setFocusNonce] = useState(0);
+  const [requests, setRequests] = useState<SearchRequests>(initialSearchRequests);
   const rate = exchangeRateSource.getRate();
 
   const setState = useCallback((next: SearchState | ((prev: SearchState) => SearchState)) => {
@@ -46,8 +51,9 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   const setView = useCallback((view: SearchView) => setStateRaw((prev) => ({ ...prev, view })), []);
   const applyPreset = useCallback((preset: SearchPreset, opts?: { focus?: boolean }) => {
     setStateRaw(stateFromPreset(preset));
-    if (opts?.focus) setFocusNonce((n) => n + 1);
+    setRequests((prev) => onPresetApplied(prev, opts));
   }, []);
+  const consumeFocusRequest = useCallback(() => setRequests((prev) => consumeFocus(prev)), []);
 
   const value = useMemo<SearchContextValue>(() => {
     const displayPrice = (original: Money) => toDisplayPrice(original, currency, rate);
@@ -56,7 +62,9 @@ export function SearchProvider({ children }: { children: ReactNode }) {
       setState,
       setView,
       applyPreset,
-      focusNonce,
+      focusRequested: requests.focusRequested,
+      consumeFocusRequest,
+      scrollResetToken: requests.scrollResetToken,
       currency,
       setCurrency,
       rate,
@@ -67,7 +75,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
       },
       formatBudgetRon: (ron) => formatMoney({ amount: ronToDisplayAmount(ron, currency, rate), currency }),
     };
-  }, [state, setState, setView, applyPreset, focusNonce, currency, rate]);
+  }, [state, setState, setView, applyPreset, requests, consumeFocusRequest, currency, rate]);
 
   return <SearchContext.Provider value={value}>{children}</SearchContext.Provider>;
 }

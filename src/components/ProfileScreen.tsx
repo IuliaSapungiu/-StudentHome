@@ -1,27 +1,36 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '@/theme';
 import { Button } from '@/components/Button';
 import { StatusPill } from '@/components/StatusPill';
 import { VerificationBanner } from '@/components/VerificationBanner';
-import { demoVerificationEnabled } from '@/config/demo';
+import { demoLandlordEnabled, demoVerificationEnabled } from '@/config/demo';
 import { ContentContainer } from '@/components/ContentContainer';
 import { useSession } from '@/features/session/SessionProvider';
 import { fullNameOf, getModeAction, homeRouteFor, initialsFor } from '@/features/session/sessionLogic';
+import { useApplications } from '@/features/applications/ApplicationsProvider';
+import { useMessaging } from '@/features/messaging/MessagingProvider';
+import { useNotifications } from '@/features/notifications/NotificationsProvider';
+import { useSaved } from '@/features/saved/SavedProvider';
 import { useVerification } from '@/features/verification/VerificationProvider';
+import { useViewings } from '@/features/viewings/ViewingsProvider';
 import type { Mode } from '@/features/session/types';
 
-type Row = { icon: keyof typeof Ionicons.glyphMap; label: string };
+// `href` makes a row work; rows without one are display-only (Bookings stays inactive on purpose).
+type Row = { icon: keyof typeof Ionicons.glyphMap; label: string; href?: Href; detail?: string };
 
-const STUDENT_ROWS: Row[][] = [
+type Counts = { saved: number; unread: number; upcoming: number; applications: number; notifications: number };
+
+const studentRows = (c: Counts): Row[][] => [
   [
-    { icon: 'heart-outline', label: 'Saved properties' },
-    { icon: 'chatbubble-outline', label: 'Messages' },
-    { icon: 'calendar-outline', label: 'Viewings' },
+    { icon: 'heart-outline', label: 'Saved properties', href: '/(student)/saved', detail: c.saved > 0 ? String(c.saved) : undefined },
+    { icon: 'chatbubble-outline', label: 'Messages', href: '/(student)/messages', detail: c.unread > 0 ? `${c.unread} unread` : undefined },
+    { icon: 'calendar-outline', label: 'Viewings', href: '/my-viewings', detail: c.upcoming > 0 ? `${c.upcoming} upcoming` : undefined },
+    { icon: 'document-text-outline', label: 'Applications', href: '/applications', detail: c.applications > 0 ? `${c.applications} active` : undefined },
     { icon: 'home-outline', label: 'Bookings' },
-    { icon: 'notifications-outline', label: 'Notifications' },
+    { icon: 'notifications-outline', label: 'Notifications', href: '/notifications', detail: c.notifications > 0 ? `${c.notifications} unread` : undefined },
   ],
   [
     { icon: 'people-outline', label: 'Help & support' },
@@ -42,15 +51,21 @@ const PROVIDER_ROWS: Row[][] = [
   ],
 ];
 
-// Shared by the student and landlord Profile tabs. Menu rows are display-only for now.
+// Shared by the student and landlord Profile tabs. On the student side Saved, Messages, Viewings and Applications
+// open their screens; the other rows are display-only for now.
 export function ProfileScreen({ mode }: { mode: Mode }) {
   const router = useRouter();
   const { user, logout, switchMode, becomeProvider } = useSession();
   const verification = useVerification();
+  const saved = useSaved();
+  const { unreadCount } = useMessaging();
+  const { upcomingCount } = useViewings();
+  const { activeCount } = useApplications();
+  const { unreadCount: notificationCount } = useNotifications();
   if (!user) return null;
 
   const action = getModeAction(user, mode);
-  const groups = mode === 'provider' ? PROVIDER_ROWS : STUDENT_ROWS;
+  const groups: Row[][] = mode === 'provider' ? PROVIDER_ROWS : studentRows({ saved: saved.count, unread: unreadCount, upcoming: upcomingCount, applications: activeCount, notifications: notificationCount });
 
   const onModeAction = async () => {
     if (!action) return;
@@ -110,18 +125,26 @@ export function ProfileScreen({ mode }: { mode: Mode }) {
           {groups.map((rows, i) => (
             <View key={i} style={styles.card}>
               {rows.map((row, j) => (
-                <View key={row.label} style={[styles.menuRow, j > 0 && styles.menuDivider]}>
+                <Pressable
+                  key={row.label}
+                  accessibilityRole={row.href ? 'button' : undefined}
+                  accessibilityLabel={row.detail ? `${row.label}, ${row.detail}` : row.label}
+                  disabled={!row.href}
+                  onPress={() => row.href && router.push(row.href)}
+                  style={[styles.menuRow, j > 0 && styles.menuDivider]}>
                   <View style={styles.menuIcon}>
                     <Ionicons name={row.icon} size={18} color={colors.primary} />
                   </View>
                   <Text style={styles.menuLabel}>{row.label}</Text>
+                  {row.detail ? <Text style={styles.menuDetail}>{row.detail}</Text> : null}
                   <Ionicons name="chevron-forward" size={18} color={colors.text} />
-                </View>
+                </Pressable>
               ))}
             </View>
           ))}
 
           {demoVerificationEnabled && <Button variant="outline" label="Demo controls (simulated verification)" onPress={() => router.push('/demo-controls')} />}
+          {demoLandlordEnabled && mode === 'student' && <Button variant="outline" label="Demo landlord (simulated replies)" onPress={() => router.push('/demo-landlord')} />}
           <Button variant="outline" label="Log out" onPress={onLogout} />
           <Text style={styles.footer}>StudentHouse · Prototype</Text>
         </ContentContainer>
@@ -147,5 +170,6 @@ const styles = StyleSheet.create({
   menuDivider: { borderTopWidth: 1, borderTopColor: colors.border },
   menuIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' },
   menuLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text },
+  menuDetail: { fontSize: 12, color: '#2B6CB0' },
   footer: { fontSize: 11, color: colors.muted, textAlign: 'center', marginTop: spacing.sm },
 });

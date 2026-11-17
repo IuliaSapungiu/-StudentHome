@@ -1,11 +1,14 @@
 import { useRef, useState } from 'react';
-import { FlatList, Image, StyleSheet, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { FlatList, StyleSheet, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { colors, radius } from '@/theme';
+import { PropertyImage } from '@/components/PropertyImage';
 
 type Props = { images: string[]; aspectRatio?: number; rounded?: boolean };
 
-// Swipeable photo carousel with a "2 / 5" counter. Measures its own width so paging is exact in
-// any orientation or split-screen size.
+// Swipeable photo carousel with a "2 / 5" counter. Measures its own width so paging is exact in any orientation or
+// split-screen size. A measurement of 0 (what a screen can report while another screen is being pushed over it) is
+// IGNORED, so the gallery keeps its size and never unmounts its photos during navigation; the list is only rebuilt
+// when the width really changes to another positive value (rotation), and then keeps the current photo.
 export function PhotoGallery({ images, aspectRatio = 1.4, rounded = false }: Props) {
   const [width, setWidth] = useState(0);
   const [index, setIndex] = useState(0);
@@ -17,11 +20,15 @@ export function PhotoGallery({ images, aspectRatio = 1.4, rounded = false }: Pro
   };
 
   return (
-    <View style={[styles.wrap, rounded && styles.rounded, { height }]} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}>
+    <View style={[styles.wrap, rounded && styles.rounded, { height }]} onLayout={(e: LayoutChangeEvent) => {
+        const w = Math.round(e.nativeEvent.layout.width);
+        if (w > 0) setWidth((prev) => (prev === w ? prev : w));
+      }}>
       {width > 0 && (
         <FlatList
           ref={listRef}
           key={width} // re-measure after rotation
+          initialScrollIndex={Math.min(index, Math.max(0, images.length - 1))}
           data={images}
           horizontal
           pagingEnabled
@@ -30,7 +37,7 @@ export function PhotoGallery({ images, aspectRatio = 1.4, rounded = false }: Pro
           onMomentumScrollEnd={onEnd}
           getItemLayout={(_d, i) => ({ length: width, offset: width * i, index: i })}
           renderItem={({ item, index: i }) => (
-            <Image source={{ uri: item }} accessibilityLabel={`Photo ${i + 1} of ${images.length}`} style={{ width, height }} resizeMode="cover" />
+            <PropertyImage uri={item} accessibilityLabel={`Photo ${i + 1} of ${images.length}`} style={{ width, height }} />
           )}
         />
       )}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '@/theme';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -23,9 +23,10 @@ import { DemoTag } from '@/components/DemoTag';
 import { PhotoGallery } from '@/components/property/PhotoGallery';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { formatMoney, formatRate } from '@/features/currency/format';
+import { useOpenConversation } from '@/features/messaging/useOpenConversation';
 import { useSaved } from '@/features/saved/SavedProvider';
 import { useSearch } from '@/features/search/SearchProvider';
-import { useVerifiedActionGate } from '@/features/verification/useVerifiedActionGate';
+import { useRequireAccount } from '@/features/session/useRequireAccount';
 import { toIsoDate } from '@/lib/dates';
 
 type Load = { status: 'loading' } | { status: 'missing' } | { status: 'ready'; property: Property };
@@ -82,9 +83,12 @@ function Detail({ property: p }: { property: Property }) {
   const layout = useResponsive();
   const { displayPrice, formatPrice, rate, currency } = useSearch();
   const { isSaved, toggleSaved } = useSaved();
-  const messageGate = useVerifiedActionGate('message');
-  const viewingGate = useVerifiedActionGate('request_viewing');
-  const [notice, setNotice] = useState<'message' | 'viewing' | null>(null);
+  const router = useRouter();
+  // Message: email gate, then the chat (nothing is created until a message is sent). Viewing request and
+  // application: guests are sent to sign in; otherwise the form opens straight away. Email / SMS verification
+  // happens only when the student presses Send / Submit on a complete form (and the repositories re-check it).
+  const messageGate = useOpenConversation();
+  const requireAccount = useRequireAccount();
 
   const wide = layout.width >= 700; // tablets and phones in landscape: gallery beside the details
   const saved = isSaved(p.id);
@@ -119,10 +123,10 @@ function Detail({ property: p }: { property: Property }) {
   const actions = (
     <View style={styles.actions}>
       <View style={{ flex: 1 }}>
-        <Button label="Message landlord" variant="outline" onPress={() => messageGate.run(() => setNotice('message'))} />
+        <Button label="Message landlord" variant="outline" onPress={() => messageGate.open(p.id, 'property_detail')} />
       </View>
       <View style={{ flex: 1 }}>
-        <Button label="Request viewing" onPress={() => viewingGate.run(() => setNotice('viewing'))} />
+        <Button label="Request viewing" onPress={() => requireAccount(() => router.push({ pathname: '/request-viewing', params: { propertyId: p.id, origin: 'property_detail' } }))} />
       </View>
     </View>
   );
@@ -202,19 +206,11 @@ function Detail({ property: p }: { property: Property }) {
         {isVerified(p) && <Text style={styles.fine}>Identity verified. This is about the landlord, not about the property.</Text>}
       </Section>
 
-      {notice && (
-        <View style={styles.notice} accessibilityLiveRegion="polite">
-          <Ionicons name="information-circle-outline" size={20} color="#8A5A00" />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={styles.noticeTitle}>{notice === 'message' ? 'Messaging is coming in a later step' : 'Viewing requests are coming in a later step'}</Text>
-            <Text style={styles.noticeText}>
-              {notice === 'message'
-                ? 'You are cleared to message landlords, but this feature is not built yet. No message was sent.'
-                : 'You are cleared to request viewings, but this feature is not built yet. No request was made.'}
-            </Text>
-          </View>
-        </View>
-      )}
+      <View style={styles.applyCard}>
+        <Text style={styles.applyTitle}>Ready to rent?</Text>
+        <Text style={styles.applyText}>Send the landlord a rental application. It only tells them you are interested: it does not book or reserve this home, and you can still message the landlord or ask for a viewing.</Text>
+        <Button label="Apply to rent" variant="outline" onPress={() => requireAccount(() => router.push({ pathname: '/apply/[propertyId]', params: { propertyId: p.id, origin: 'property_detail' } }))} />
+      </View>
     </View>
   );
 
@@ -245,7 +241,6 @@ function Detail({ property: p }: { property: Property }) {
         </>
       )}
       {messageGate.sheet}
-      {viewingGate.sheet}
     </View>
   );
 }
@@ -298,7 +293,7 @@ const styles = StyleSheet.create({
   ownerName: { fontSize: 15, fontWeight: '600', color: colors.text },
   actions: { flexDirection: 'row', gap: spacing.sm },
   bar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: spacing.md, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: colors.border },
-  notice: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: colors.warning, borderRadius: radius.md, padding: spacing.md },
-  noticeTitle: { fontSize: 13, fontWeight: '700', color: '#6B4600' },
-  noticeText: { fontSize: 12, lineHeight: 17, color: '#6B4600' },
+  applyCard: { backgroundColor: colors.mint, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm },
+  applyTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+  applyText: { fontSize: 12, lineHeight: 18, color: colors.text },
 });

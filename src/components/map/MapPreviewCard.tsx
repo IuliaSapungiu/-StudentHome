@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Image, PanResponder, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { PanResponder, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { PropertyImage } from '@/components/PropertyImage';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '@/theme';
 import { describeAmenity, describeDetail, isDemo, isVerified, type Property } from '@/data';
@@ -37,7 +38,7 @@ export function MapPreviewCard({ property, onOpen, onLayout }: Props) {
         <View style={styles.handle} />
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel={`Open ${property.title}`} onPress={() => onOpen(property.id)} style={styles.row}>
-        <Image source={{ uri: property.images[0] }} style={styles.thumb} />
+        <PropertyImage compact uri={property.images[0]} style={styles.thumb} />
         <View style={styles.info}>
           <View style={styles.locRow}>
             <Ionicons name="location-outline" size={12} color={colors.muted} />
