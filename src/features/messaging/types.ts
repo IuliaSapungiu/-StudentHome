@@ -50,17 +50,24 @@ export type Message = {
  * (unread counts are derived from this, never stored) and what THEY did with it in their own inbox:
  *  - `hiddenAt`:  reversible; it moves to their "Hidden conversations" list
  *  - `deletedAt`: it is gone from their normal and hidden lists, with no unhide
- * Neither touches the shared conversation or its messages, and neither affects the other participant.
- * New activity (a message, a viewing card) clears both for the people it reaches.
+ *  - `clearedAt`: set together with `deletedAt`. It is THIS person's history cutoff: they only ever see messages and
+ *    status cards created AFTER it. The shared messages are not touched, so the other participant keeps the whole
+ *    history, and the old messages can never come back for this person.
+ * None of them touches the shared conversation or its messages, and none affects the other participant.
+ * New activity (a message, a viewing card) brings a hidden or deleted conversation back into the inbox of the people
+ * it reaches (`hiddenAt` and `deletedAt` are cleared) but NEVER clears `clearedAt`: only the new content shows.
+ * Supabase: `conversation_participants.cleared_at`, applied as `messages.created_at > cleared_at` in the participant's reads.
  */
-export type ParticipantRead = { conversationId: string; userId: string; lastReadAt: string | null; hiddenAt: string | null; deletedAt: string | null };
+export type ParticipantRead = { conversationId: string; userId: string; lastReadAt: string | null; hiddenAt: string | null; deletedAt: string | null; clearedAt: string | null };
 
 export type ConversationSummary = { conversation: Conversation; lastMessage: Message | null; unreadCount: number; /** Hidden from THIS person's inbox (reversible). */ hidden: boolean; /** Deleted from THIS person's inbox. */ deleted: boolean };
 
 export type Thread = {
   conversation: Conversation;
-  /** Oldest first. */
+  /** Oldest first. Only what THIS person may see: nothing from before they cleared the conversation. */
   messages: Message[];
   /** When the OTHER person last read the conversation (drives the "Read" label). */
   counterpartLastReadAt: string | null;
+  /** True when THIS person has hidden the conversation from their inbox (so the screen can offer "Unhide"). */
+  hidden: boolean;
 };

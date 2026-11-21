@@ -5,7 +5,7 @@ import type { Message } from '@/features/messaging/types';
 
 type Props = { message: Message; mine: boolean; read: boolean };
 
-// One normal text message. Editing and deleting (own messages, first 20 minutes) is done by swiping the row, which
+// One normal text message. Editing and deleting (own messages, first 20 minutes) is done by swiping the row LEFT, which
 // the chat screen wraps around this bubble; there is no "deleted" placeholder because deleting removes the message.
 export function MessageBubble({ message, mine, read }: Props) {
   return (

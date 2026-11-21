@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { PropertyImage } from '@/components/PropertyImage';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '@/theme';
@@ -19,6 +19,10 @@ type Props = {
   busy: boolean;
   /** This is the viewing a notification or link pointed at. */
   highlighted: boolean;
+  /** There is an unread notification about THIS viewing (shows a red dot until the student opens it). */
+  unread?: boolean;
+  /** The student opened this exact viewing (tapped its card or its history). Marks its notifications as read. */
+  onOpen?: () => void;
   onCancel: () => void;
   onReschedule: () => void;
   onAcceptAlternative: () => void;
@@ -28,7 +32,7 @@ type Props = {
 
 // One viewing in the student's Viewings list. The exact address appears only once the viewing is confirmed.
 // The full history (original request and every proposed time, each with its outcome) is one tap away.
-export function ViewingCard({ viewing: v, property, nowLocal, busy, highlighted, onCancel, onReschedule, onAcceptAlternative, onRejectAlternative, onMessage }: Props) {
+export function ViewingCard({ viewing: v, property, nowLocal, busy, highlighted, unread = false, onOpen, onCancel, onReschedule, onAcceptAlternative, onRejectAlternative, onMessage }: Props) {
   const { getConfirmedAddress } = useViewings();
   const [address, setAddress] = useState<string | null>(null);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
@@ -54,18 +58,21 @@ export function ViewingCard({ viewing: v, property, nowLocal, busy, highlighted,
   return (
     <View style={[styles.card, highlighted && styles.cardOn]}>
       {highlighted ? <Text style={styles.updated}>Updated</Text> : null}
-      <View style={styles.top}>
-        <StatusBadge label={statusLabel(v, nowLocal)} tone={viewingTone(v, nowLocal)} />
+      <Pressable accessibilityRole="button" accessibilityLabel={`${unread ? 'New update. ' : ''}Open this viewing`} style={styles.top} onPress={() => onOpen?.()}>
+        <View style={styles.statusRow}>
+          <StatusBadge label={statusLabel(v, nowLocal)} tone={viewingTone(v, nowLocal)} />
+          {unread ? <View style={styles.unreadDot} accessibilityLabel="Unread update" /> : null}
+        </View>
         <Text style={[styles.time, bucket === 'past' && styles.timePast]}>{start.slice(11)}</Text>
-      </View>
+      </Pressable>
 
-      <View style={styles.home}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open this viewing" style={styles.home} onPress={() => onOpen?.()}>
         {property ? <PropertyImage compact uri={property.images[0]} style={styles.thumb} /> : <View style={styles.thumb} />}
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={styles.title} numberOfLines={2}>{property?.title ?? 'This listing is no longer available'}</Text>
           {landlord ? <Text style={styles.sub}>With {landlord}</Text> : null}
         </View>
-      </View>
+      </Pressable>
 
       {v.status === 'alternative_proposed' ? (
         <View style={styles.alt}>
@@ -126,7 +133,7 @@ export function ViewingCard({ viewing: v, property, nowLocal, busy, highlighted,
         </View>
       ) : null}
 
-      <Text accessibilityRole="button" onPress={() => setShowHistory((o) => !o)} style={styles.historyToggle}>
+      <Text accessibilityRole="button" onPress={() => { if (!showHistory) onOpen?.(); setShowHistory((o) => !o); }} style={styles.historyToggle}>
         {showHistory ? 'Hide history' : `Show history (${rows.length} ${rows.length === 1 ? 'time' : 'times'})`}
       </Text>
       {showHistory ? (
@@ -152,6 +159,8 @@ const styles = StyleSheet.create({
   cardOn: { borderColor: colors.primary, borderWidth: 2 },
   updated: { alignSelf: 'flex-start', fontSize: 11, fontWeight: '700', color: '#fff', backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 3, overflow: 'hidden' },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#D64545' },
   time: { fontSize: 20, fontWeight: '700', color: colors.text },
   timePast: { color: '#B8C2BC' },
   home: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },

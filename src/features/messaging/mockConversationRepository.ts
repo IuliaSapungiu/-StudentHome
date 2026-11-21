@@ -8,7 +8,7 @@ import { fail, ok } from '../shared/result';
 import type { AccessChecker } from '../verification/accessChecker';
 import { VIEWING_EVENT_CODES, VIEWING_STATUSES } from '../viewings/types';
 import type { ConversationRepository, ViewingEventSink } from './conversationRepository';
-import { byTime, counterpartOf, isParticipant, isWithinChangeWindow, MESSAGE_CHANGE_WINDOW_MINUTES, sortSummaries, summarize, validateMessageBody } from './messagingLogic';
+import { afterCutoffs, byTime, counterpartOf, isParticipant, isWithinChangeWindow, MESSAGE_CHANGE_WINDOW_MINUTES, sortSummaries, summarize, validateMessageBody, visibleTo } from './messagingLogic';
 import type { Conversation, Message, ParticipantRead } from './types';
 
 export type MessagingStores = {
@@ -55,7 +55,7 @@ const parseMessage = (raw: unknown): Message | null => {
 const parseRead = (raw: unknown): ParticipantRead | null => {
   if (!isRecord(raw)) return null;
   const conversationId = asString(raw.conversationId), userId = asString(raw.userId);
-  return conversationId && userId ? { conversationId, userId, lastReadAt: asIsoTimestamp(raw.lastReadAt), hiddenAt: asIsoTimestamp(raw.hiddenAt), deletedAt: asIsoTimestamp(raw.deletedAt) } : null;
+  return conversationId && userId ? { conversationId, userId, lastReadAt: asIsoTimestamp(raw.lastReadAt), hiddenAt: asIsoTimestamp(raw.hiddenAt), deletedAt: asIsoTimestamp(raw.deletedAt), clearedAt: asIsoTimestamp(raw.clearedAt) } : null;
 };
 
 export function createMessagingStores(storage: MockStorage): MessagingStores {
@@ -87,14 +87,17 @@ export function createMockConversationRepository(deps: Deps): ConversationReposi
   const ownerSimulated = deps.ownerActionsSimulated ?? true;
 
   async function appendMessage(m: Omit<Message, 'id' | 'createdAt' | 'editedAt'>): Promise<Message> {
-    const message: Message = { ...m, id: newId(), createdAt: now().toISOString(), editedAt: null };
+    const cutoffs = (await stores.reads.all()).filter((r) => r.conversationId === m.conversationId).map((r) => r.clearedAt);
+    const message: Message = { ...m, id: newId(), createdAt: afterCutoffs(now().toISOString(), cutoffs), editedAt: null };
     await stores.messages.update((rows) => ({ rows: [...rows, message], result: undefined }));
     await stores.conversations.update((rows) => ({ rows: rows.map((c) => (c.id === m.conversationId ? { ...c, lastMessageAt: message.createdAt } : c)), result: undefined }));
     // Whoever sends has, by definition, read the conversation up to their own message.
     await setRead(m.conversationId, m.senderId, message.createdAt);
     // New activity brings a hidden OR deleted conversation back into the normal inbox of the people it reaches:
     // everyone except the sender, and the sender too when they wrote a message themselves. (A viewing card caused by
-    // someone's own action does not bring the conversation back for that same person.)
+    // someone's own action does not bring the conversation back for that same person.) Only `hiddenAt` and `deletedAt`
+    // are cleared. `clearedAt` (the history cutoff) stays, so a person who deleted the conversation sees ONLY the new
+    // message, never the old timeline.
     await stores.reads.update((rows) => ({
       rows: rows.map((r) => (r.conversationId === m.conversationId && (r.userId !== m.senderId || m.kind === 'text') && (r.hiddenAt || r.deletedAt) ? { ...r, hiddenAt: null, deletedAt: null } : r)),
       result: undefined,
@@ -107,9 +110,13 @@ export function createMockConversationRepository(deps: Deps): ConversationReposi
       const existing = rows.find((r) => r.conversationId === conversationId && r.userId === userId);
       if (existing && existing.lastReadAt !== null && existing.lastReadAt >= at) return { rows, result: undefined }; // never moves backwards
       const others = rows.filter((r) => r !== existing);
-      return { rows: [...others, { conversationId, userId, lastReadAt: at, hiddenAt: existing?.hiddenAt ?? null, deletedAt: existing?.deletedAt ?? null }], result: undefined };
+      return { rows: [...others, { conversationId, userId, lastReadAt: at, hiddenAt: existing?.hiddenAt ?? null, deletedAt: existing?.deletedAt ?? null, clearedAt: existing?.clearedAt ?? null }], result: undefined };
     });
   }
+
+  /** The cutoff of one participant's own history (null = they see everything). */
+  const clearedAtOf = async (conversationId: string, userId: string): Promise<string | null> =>
+    (await stores.reads.all()).find((r) => r.conversationId === conversationId && r.userId === userId)?.clearedAt ?? null;
 
   const findConversation = async (studentId: string, propertyId: string) =>
     (await stores.conversations.all()).find((c) => c.studentId === studentId && c.propertyId === propertyId) ?? null;
@@ -121,7 +128,9 @@ export function createMockConversationRepository(deps: Deps): ConversationReposi
         conversations
           .filter((c) => isParticipant(c, userId))
           .map((c) => summarize(c, messages, reads, userId))
-          .filter((x) => x.lastMessage !== null && (options?.includeDeleted || !x.deleted)), // an emptied conversation has nothing to show
+          // A conversation with nothing visible has nothing to show: that includes one the person just deleted (their history is
+          // cleared). It stays reachable with `includeDeleted`, which is how the deleted state is inspected.
+          .filter((x) => (options?.includeDeleted ? x.deleted || x.lastMessage !== null : x.lastMessage !== null && !x.deleted)),
       );
     },
 
@@ -130,10 +139,13 @@ export function createMockConversationRepository(deps: Deps): ConversationReposi
       if (!conversation || !isParticipant(conversation, userId)) return fail('not_found', 'This conversation is not available.');
       const [messages, reads] = await Promise.all([stores.messages.all(), stores.reads.all()]);
       const other = counterpartOf(conversation, userId);
+      const mine = reads.find((r) => r.conversationId === conversationId && r.userId === userId);
       return ok({
         conversation,
-        messages: messages.filter((m) => m.conversationId === conversationId).sort(byTime),
+        // Only what THIS person may see: nothing from before they cleared the conversation. The other participant's view is unaffected.
+        messages: visibleTo(messages.filter((m) => m.conversationId === conversationId), mine?.clearedAt ?? null).sort(byTime),
         counterpartLastReadAt: reads.find((r) => r.conversationId === conversationId && r.userId === other)?.lastReadAt ?? null,
+        hidden: !!mine?.hiddenAt && !mine?.deletedAt,
       });
     },
 
@@ -176,7 +188,7 @@ export function createMockConversationRepository(deps: Deps): ConversationReposi
     async markRead(conversationId, userId) {
       const conversation = (await stores.conversations.all()).find((c) => c.id === conversationId);
       if (!conversation || !isParticipant(conversation, userId)) return;
-      const latest = (await stores.messages.all()).filter((m) => m.conversationId === conversationId).sort(byTime).pop();
+      const latest = visibleTo((await stores.messages.all()).filter((m) => m.conversationId === conversationId), await clearedAtOf(conversationId, userId)).sort(byTime).pop();
       const at = [now().toISOString(), latest?.createdAt ?? ''].sort().pop() as string;
       await setRead(conversationId, userId, at);
     },
@@ -207,6 +219,7 @@ export function createMockConversationRepository(deps: Deps): ConversationReposi
       const message = (await stores.messages.all()).find((m) => m.id === messageId);
       const conversation = message && (await stores.conversations.all()).find((c) => c.id === message.conversationId);
       if (!message || !conversation || !isParticipant(conversation, userId)) return fail('not_found', 'This message is not available.');
+      if (visibleTo([message], await clearedAtOf(conversation.id, userId)).length === 0) return fail('not_found', 'This message is not available.'); // from before they cleared the conversation
       if (message.kind !== 'text') return fail('forbidden', 'Status cards cannot be edited.');
       if (message.senderId !== userId) return fail('forbidden', 'You can only edit your own messages.');
       // The window runs from the ORIGINAL send time and editing never moves it.
@@ -227,6 +240,7 @@ export function createMockConversationRepository(deps: Deps): ConversationReposi
       const message = (await stores.messages.all()).find((m) => m.id === messageId);
       const conversation = message && (await stores.conversations.all()).find((c) => c.id === message.conversationId);
       if (!message || !conversation || !isParticipant(conversation, userId)) return fail('not_found', 'This message is not available.');
+      if (visibleTo([message], await clearedAtOf(conversation.id, userId)).length === 0) return fail('not_found', 'This message is not available.'); // from before they cleared the conversation
       if (message.kind !== 'text') return fail('forbidden', 'Status cards cannot be deleted.');
       if (message.senderId !== userId) return fail('forbidden', 'You can only delete your own messages.');
       if (!isWithinChangeWindow(message, now())) return fail('expired', `Messages can only be deleted within ${MESSAGE_CHANGE_WINDOW_MINUTES} minutes of sending.`);
@@ -252,11 +266,12 @@ export function createMockConversationRepository(deps: Deps): ConversationReposi
     const at = now().toISOString();
     await stores.reads.update((rows) => {
       const existing = rows.find((r) => r.conversationId === conversationId && r.userId === userId);
-      const base = { conversationId, userId, lastReadAt: existing?.lastReadAt ?? null };
+      const base = { conversationId, userId, lastReadAt: existing?.lastReadAt ?? null, clearedAt: existing?.clearedAt ?? null };
+      // Deleting also sets the history cutoff: this person's old messages and status cards are gone from THEIR view for good.
       const row: ParticipantRead =
         action === 'hide' ? { ...base, hiddenAt: existing?.deletedAt ? null : at, deletedAt: existing?.deletedAt ?? null }
         : action === 'unhide' ? { ...base, hiddenAt: null, deletedAt: existing?.deletedAt ?? null }
-        : { ...base, hiddenAt: null, deletedAt: at };
+        : { ...base, hiddenAt: null, deletedAt: at, clearedAt: at };
       return { rows: [...rows.filter((r) => r !== existing), row], result: undefined };
     });
     return ok<null>(null);

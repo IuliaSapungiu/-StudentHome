@@ -1,3 +1,4 @@
+import { BATHROOM_BANDS, BATHROOM_BAND_LABEL, DISTANCE_BANDS, DISTANCE_BAND_LABEL, type BathroomBand, type DistanceBand } from '../../data/filterBands';
 import type { Amenity, PropertySearchQuery, PropertyType, SortOption } from '../../data/types';
 import { formatIsoDate, isValidIsoDate } from '../../lib/dates';
 import { EMPTY_BUDGET, hasBudget, normalizeBudget, type Budget } from './budget';
@@ -6,27 +7,34 @@ import { EMPTY_BUDGET, hasBudget, normalizeBudget, type Budget } from './budget'
 // This module is pure: no React, React Native, Expo or storage imports.
 
 export type SearchView = 'list' | 'map';
-export type BathroomChoice = 'any' | 'one' | 'two_plus';
+/** A bathroom choice. "Any" is not a choice: no choice selected means no bathroom filter. */
+export type BathroomChoice = BathroomBand;
+export type DistanceChoice = DistanceBand;
 
 export const PROPERTY_TYPES: readonly PropertyType[] = ['studio', 'apartment', 'private_room', 'shared_room', 'residence'];
 export const AMENITIES: readonly Amenity[] = ['furnished', 'bills_included', 'private_bathroom', 'wifi', 'washing_machine', 'parking'];
 export const SORT_OPTIONS: readonly SortOption[] = ['recommended', 'price_asc', 'price_desc'];
-export const BATHROOM_CHOICES: readonly BathroomChoice[] = ['any', 'one', 'two_plus'];
-/** Distance filter choices (minutes to the university). */
-export const DISTANCE_CHOICES: readonly number[] = [15, 30];
+export const BATHROOM_CHOICES: readonly BathroomChoice[] = BATHROOM_BANDS;
+export const BATHROOM_LABEL = BATHROOM_BAND_LABEL;
+/** Distance filter choices (non-overlapping bands of minutes to the university; see data/filterBands.ts). */
+export const DISTANCE_CHOICES: readonly DistanceChoice[] = DISTANCE_BANDS;
+export const DISTANCE_LABEL = DISTANCE_BAND_LABEL;
 /** 0 = studio, 3 = "3 or more". */
 export const BEDROOM_CHOICES: readonly number[] = [0, 1, 2, 3];
 
 export type SearchState = {
   text: string;
-  city: string | null;
-  /** University short name, for example "ASE". */
-  university: string | null;
+  /** Several cities can be chosen; a home in any of them matches. Empty = any city. */
+  cities: string[];
+  /** University short names, for example ["ASE"]. Several can be chosen (OR). Empty = any university. */
+  universities: string[];
   /** RON-equivalent limits; see budget.ts. */
   budget: Budget;
-  maxMinutesToUniversity: number | null;
+  /** Several distance bands can be chosen (OR). Empty = any distance. */
+  distances: DistanceChoice[];
   bedrooms: number[];
-  bathrooms: BathroomChoice;
+  /** Several bathroom choices can be chosen (OR). Empty = any number of bathrooms. */
+  bathrooms: BathroomChoice[];
   types: PropertyType[];
   /** ISO date (YYYY-MM-DD): show homes available on or before this day. */
   availableBy: string | null;
@@ -39,12 +47,12 @@ export type SearchState = {
 
 export const defaultSearchState = (): SearchState => ({
   text: '',
-  city: null,
-  university: null,
+  cities: [],
+  universities: [],
   budget: { ...EMPTY_BUDGET },
-  maxMinutesToUniversity: null,
+  distances: [],
   bedrooms: [],
-  bathrooms: 'any',
+  bathrooms: [],
   types: [],
   availableBy: null,
   amenities: [],
@@ -54,7 +62,21 @@ export const defaultSearchState = (): SearchState => ({
 });
 
 const uniq = <T,>(list: readonly T[]): T[] => [...new Set(list)];
-const cleanString = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
+/** Trimmed, non-empty, de-duplicated (ignoring letter case) and sorted, so the same choices always give the same state and the same query key. */
+const cleanStrings = (v: unknown): string[] => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const x of Array.isArray(v) ? v : []) {
+    if (typeof x !== 'string' || x.trim() === '') continue;
+    const t = x.trim();
+    if (seen.has(t.toLowerCase())) continue;
+    seen.add(t.toLowerCase());
+    out.push(t);
+  }
+  return out.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+};
+/** Keeps only known choices, once each, in the canonical order. */
+const onlyKnown = <T extends string>(known: readonly T[], v: unknown): T[] => known.filter((k) => Array.isArray(v) && v.includes(k));
 
 /** Makes any partial / untrusted state safe: unknown values are dropped, lists de-duplicated, ranges ordered. */
 export function normalizeSearchState(input: Partial<SearchState> | null | undefined): SearchState {
@@ -62,13 +84,12 @@ export function normalizeSearchState(input: Partial<SearchState> | null | undefi
   const s = input ?? {};
   return {
     text: typeof s.text === 'string' ? s.text.slice(0, 100) : base.text,
-    city: cleanString(s.city),
-    university: cleanString(s.university),
+    cities: cleanStrings(s.cities),
+    universities: cleanStrings(s.universities),
     budget: normalizeBudget(s.budget),
-    maxMinutesToUniversity:
-      typeof s.maxMinutesToUniversity === 'number' && DISTANCE_CHOICES.includes(s.maxMinutesToUniversity) ? s.maxMinutesToUniversity : null,
+    distances: onlyKnown(DISTANCE_CHOICES, s.distances),
     bedrooms: uniq((Array.isArray(s.bedrooms) ? s.bedrooms : []).filter((n) => BEDROOM_CHOICES.includes(n))).sort((a, b) => a - b),
-    bathrooms: BATHROOM_CHOICES.includes(s.bathrooms as BathroomChoice) ? (s.bathrooms as BathroomChoice) : 'any',
+    bathrooms: onlyKnown(BATHROOM_CHOICES, s.bathrooms),
     types: uniq((Array.isArray(s.types) ? s.types : []).filter((t) => PROPERTY_TYPES.includes(t))),
     availableBy: isValidIsoDate(s.availableBy) ? s.availableBy : null,
     amenities: uniq((Array.isArray(s.amenities) ? s.amenities : []).filter((a) => AMENITIES.includes(a))),
@@ -84,16 +105,13 @@ export function toQuery(state: SearchState): PropertySearchQuery {
   const q: PropertySearchQuery = { sort: s.sort };
   const text = s.text.trim();
   if (text) q.text = text;
-  if (s.city) q.city = s.city;
-  if (s.university) q.university = s.university;
+  if (s.cities.length) q.cities = s.cities;
+  if (s.universities.length) q.universities = s.universities;
   if (s.budget.minRon !== null) q.minRentRon = s.budget.minRon;
   if (s.budget.maxRon !== null) q.maxRentRon = s.budget.maxRon;
-  if (s.maxMinutesToUniversity !== null) q.maxMinutesToUniversity = s.maxMinutesToUniversity;
+  if (s.distances.length) q.distances = s.distances;
   if (s.bedrooms.length) q.bedrooms = s.bedrooms;
-  if (s.bathrooms === 'one') {
-    q.minBathrooms = 1;
-    q.maxBathrooms = 1;
-  } else if (s.bathrooms === 'two_plus') q.minBathrooms = 2;
+  if (s.bathrooms.length) q.bathrooms = s.bathrooms;
   if (s.types.length) q.types = s.types;
   if (s.availableBy) q.availableBy = s.availableBy;
   if (s.amenities.length) q.amenities = s.amenities;
@@ -105,19 +123,19 @@ export function toQuery(state: SearchState): PropertySearchQuery {
 export const queryKey = (state: SearchState): string => JSON.stringify(toQuery(state));
 
 /**
- * How many filters are on. Each separately-controlled filter counts once: city, university, budget
+ * How many filters are on. Each separately-controlled filter counts once, however many choices it has: cities, universities, budget
  * (min and max together), distance, bedrooms, bathrooms, move-in date, property type, verified
  * landlords, and each ticked amenity. Text and sort are not filters.
  */
 export function activeFilterCount(state: SearchState): number {
   const s = normalizeSearchState(state);
   return (
-    (s.city ? 1 : 0) +
-    (s.university ? 1 : 0) +
+    (s.cities.length ? 1 : 0) +
+    (s.universities.length ? 1 : 0) +
     (hasBudget(s.budget) ? 1 : 0) +
-    (s.maxMinutesToUniversity !== null ? 1 : 0) +
+    (s.distances.length ? 1 : 0) +
     (s.bedrooms.length ? 1 : 0) +
-    (s.bathrooms !== 'any' ? 1 : 0) +
+    (s.bathrooms.length ? 1 : 0) +
     (s.types.length ? 1 : 0) +
     (s.availableBy ? 1 : 0) +
     (s.verifiedOnly ? 1 : 0) +
@@ -201,8 +219,8 @@ const bedroomLabel = (n: number) => (n === 0 ? 'Studio' : n >= 3 ? '3+ bedrooms'
 export function activeFilterChips(state: SearchState, formatBudgetRon: (ron: number) => string): ActiveFilterChip[] {
   const s = normalizeSearchState(state);
   const chips: ActiveFilterChip[] = [];
-  if (s.city) chips.push({ id: 'city', label: s.city });
-  if (s.university) chips.push({ id: 'university', label: `Near ${s.university}` });
+  if (s.cities.length) chips.push({ id: 'city', label: s.cities.join(', ') });
+  if (s.universities.length) chips.push({ id: 'university', label: `Near ${s.universities.join(', ')}` });
   if (hasBudget(s.budget) && !isQuickChipActive(s, 'budget')) {
     const { minRon, maxRon } = s.budget;
     const label =
@@ -213,9 +231,9 @@ export function activeFilterChips(state: SearchState, formatBudgetRon: (ron: num
           : `From ${formatBudgetRon(minRon as number)}`;
     chips.push({ id: 'budget', label });
   }
-  if (s.maxMinutesToUniversity !== null) chips.push({ id: 'distance', label: `Under ${s.maxMinutesToUniversity} min` });
+  if (s.distances.length) chips.push({ id: 'distance', label: s.distances.map((d) => DISTANCE_LABEL[d]).join(', ') });
   if (s.bedrooms.length) chips.push({ id: 'bedrooms', label: s.bedrooms.map(bedroomLabel).join(', ') });
-  if (s.bathrooms !== 'any') chips.push({ id: 'bathrooms', label: s.bathrooms === 'one' ? '1 bathroom' : '2+ bathrooms' });
+  if (s.bathrooms.length) chips.push({ id: 'bathrooms', label: `${s.bathrooms.map((b) => BATHROOM_LABEL[b]).join(', ')} ${s.bathrooms.length === 1 && s.bathrooms[0] === 'one' ? 'bathroom' : 'bathrooms'}` });
   if (s.types.length) chips.push({ id: 'types', label: s.types.map((t) => TYPE_LABEL[t]).join(', ') });
   if (s.availableBy) chips.push({ id: 'availableBy', label: `Move-in ${formatIsoDate(s.availableBy)}` });
   for (const a of s.amenities) {
@@ -227,12 +245,12 @@ export function activeFilterChips(state: SearchState, formatBudgetRon: (ron: num
 
 /** Clears the filter behind a chip. Unknown ids leave the state unchanged. */
 export function removeFilter(state: SearchState, id: string): SearchState {
-  if (id === 'city') return { ...state, city: null };
-  if (id === 'university') return { ...state, university: null };
+  if (id === 'city') return { ...state, cities: [] };
+  if (id === 'university') return { ...state, universities: [] };
   if (id === 'budget') return { ...state, budget: { ...EMPTY_BUDGET } };
-  if (id === 'distance') return { ...state, maxMinutesToUniversity: null };
+  if (id === 'distance') return { ...state, distances: [] };
   if (id === 'bedrooms') return { ...state, bedrooms: [] };
-  if (id === 'bathrooms') return { ...state, bathrooms: 'any' };
+  if (id === 'bathrooms') return { ...state, bathrooms: [] };
   if (id === 'types') return { ...state, types: [] };
   if (id === 'availableBy') return { ...state, availableBy: null };
   if (id.startsWith('amenity:')) return { ...state, amenities: state.amenities.filter((a) => a !== id.slice('amenity:'.length)) };
@@ -243,11 +261,11 @@ export function removeFilter(state: SearchState, id: string): SearchState {
 export function summarizeFilters(state: SearchState): string {
   const s = normalizeSearchState(state);
   const parts: string[] = [];
-  if (s.university) parts.push(`Near ${s.university}`);
-  else if (s.city) parts.push(s.city);
+  if (s.universities.length) parts.push(`Near ${s.universities.join(', ')}`);
+  else if (s.cities.length) parts.push(s.cities.join(', '));
   if (s.availableBy) parts.push(`Move-in ${formatIsoDate(s.availableBy)}`);
   const count = activeFilterCount(s);
-  const shown = (s.university || s.city ? 1 : 0) + (s.availableBy ? 1 : 0);
+  const shown = (s.universities.length || s.cities.length ? 1 : 0) + (s.availableBy ? 1 : 0);
   if (count > shown) parts.push(`${count} ${count === 1 ? 'filter' : 'filters'}`);
   return parts.join(' · ');
 }
@@ -255,8 +273,8 @@ export function summarizeFilters(state: SearchState): string {
 /** "11 homes", "1 home near ASE", "4 homes in Bucharest". */
 export function describeResultCount(count: number, state: SearchState): string {
   const base = `${count} ${count === 1 ? 'home' : 'homes'}`;
-  if (state.university) return `${base} near ${state.university}`;
-  if (state.city) return `${base} in ${state.city}`;
+  if (state.universities.length) return `${base} near ${state.universities.join(', ')}`;
+  if (state.cities.length) return `${base} in ${state.cities.join(', ')}`;
   return base;
 }
 

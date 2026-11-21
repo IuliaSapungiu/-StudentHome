@@ -12,6 +12,7 @@ import { formatDateLong, toLocalDateTime } from '@/lib/dateTime';
 import { RequireAccount } from '@/features/session/RequireAccount';
 import { useOpenConversation } from '@/features/messaging/useOpenConversation';
 import { useViewings } from '@/features/viewings/ViewingsProvider';
+import { useNotifications } from '@/features/notifications/NotificationsProvider';
 import { bucketOf, effectiveStart, groupByDay, resolveViewingFocus, sortForTab } from '@/features/viewings/viewingRules';
 import type { ViewingTab } from '@/features/viewings/types';
 
@@ -38,6 +39,9 @@ function Content() {
   const { viewings, ready, cancel, acceptAlternative, rejectAlternative } = useViewings();
   const { byId } = usePropertiesById(viewings.map((v) => v.propertyId));
   const messageGate = useOpenConversation();
+  const { notifications, markEntityRead } = useNotifications();
+  // Viewings with an unread notification. Opening the Viewings LIST changes nothing: only opening one exact viewing does.
+  const unreadViewingIds = useMemo(() => new Set(notifications.filter((n) => n.entityType === 'viewing' && n.readAt === null).map((n) => n.entityId)), [notifications]);
   const [tab, setTab] = useState<ViewingTab>('upcoming');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,8 +69,10 @@ function Content() {
       setTab(focus.tab);
       setFocusId(focus.viewing.id);
       setMissing(false);
+      // Arrived at this exact viewing (a notification tap or a link): its notifications are now seen.
+      void markEntityRead('viewing', focus.viewing.id);
     } else setMissing(true);
-  }, [ready, viewingId, viewings]);
+  }, [ready, viewingId, viewings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const scrollToFocus = () => {
     const v = viewings.find((x) => x.id === focusId);
@@ -145,6 +151,8 @@ function Content() {
                     nowLocal={nowLocal}
                     busy={busyId === v.id}
                     highlighted={focusId === v.id}
+                    unread={unreadViewingIds.has(v.id)}
+                    onOpen={() => void markEntityRead('viewing', v.id)}
                     onCancel={() => run(v.id, () => cancel(v.id))}
                     onAcceptAlternative={() => run(v.id, () => acceptAlternative(v.id))}
                     onRejectAlternative={() => run(v.id, () => rejectAlternative(v.id))}

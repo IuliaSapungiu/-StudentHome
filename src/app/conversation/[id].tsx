@@ -17,7 +17,7 @@ import { CONTACT_ORIGINS, type ContactOrigin } from '@/features/shared/attributi
 import { RequireAccount } from '@/features/session/RequireAccount';
 import { useSession } from '@/features/session/SessionProvider';
 import { useMessaging, useThread } from '@/features/messaging/MessagingProvider';
-import { canModifyMessage, isReadByCounterpart, MESSAGE_CHANGE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH } from '@/features/messaging/messagingLogic';
+import { canModifyMessage, isReadByCounterpart, MESSAGE_CHANGE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, supersededCardIds } from '@/features/messaging/messagingLogic';
 import type { Message } from '@/features/messaging/types';
 import { useGatedSubmit } from '@/features/verification/useGatedSubmit';
 
@@ -37,7 +37,7 @@ function Content() {
   const router = useRouter();
   const { id, propertyId: propertyParam, origin: originParam } = useLocalSearchParams<{ id: string; propertyId?: string; origin?: string }>();
   const { user } = useSession();
-  const { sendMessage, startConversation, findForProperty, editMessage, deleteMessage, hideConversation, deleteConversation } = useMessaging();
+  const { sendMessage, startConversation, findForProperty, editMessage, deleteMessage, hideConversation, unhideConversation, deleteConversation } = useMessaging();
   const isNew = id === 'new';
   const [conversationId, setConversationId] = useState<string | null>(isNew ? null : id ?? null);
   const { thread, error: loadError, loading, reload } = useThread(conversationId);
@@ -121,6 +121,8 @@ function Content() {
     return out;
   }, [thread]);
 
+  // Status cards that a newer card of the same viewing request has replaced: shown toned down, still readable.
+  const superseded = useMemo(() => supersededCardIds(thread?.messages ?? []), [thread]);
   const lastMine = useMemo(() => [...(thread?.messages ?? [])].reverse().find((m) => m.senderId === user?.id && m.kind === 'text')?.id, [thread, user?.id]);
   const name = property?.owner.displayName ?? 'Landlord';
 
@@ -149,26 +151,45 @@ function Content() {
         </View>
         {headerMenu && conversationId ? (
           <View style={styles.hideMenu}>
-            <Pressable
-              accessibilityRole="button"
-              style={styles.menuRow}
-              onPress={async () => {
-                const r = await hideConversation(conversationId);
-                setHeaderMenu(false);
-                if (r.ok) router.back();
-                else setSendError(r.error.message);
-              }}>
-              <Ionicons name="eye-off-outline" size={18} color={colors.primary} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.menuText}>Hide this conversation</Text>
-                <Text style={styles.menuFine}>Only removes it from your inbox. {name} still sees it, and it comes back if either of you writes again.</Text>
-              </View>
-            </Pressable>
+            {/* The menu always reflects the real state: a hidden conversation offers "Unhide", a normal one offers "Hide". */}
+            {thread?.hidden ? (
+              <Pressable
+                accessibilityRole="button"
+                style={styles.menuRow}
+                onPress={async () => {
+                  const r = await unhideConversation(conversationId);
+                  setHeaderMenu(false);
+                  if (r.ok) await reload();
+                  else setSendError(r.error.message);
+                }}>
+                <Ionicons name="eye-outline" size={18} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.menuText}>Unhide this conversation</Text>
+                  <Text style={styles.menuFine}>Moves it back to your normal Messages list.</Text>
+                </View>
+              </Pressable>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                style={styles.menuRow}
+                onPress={async () => {
+                  const r = await hideConversation(conversationId);
+                  setHeaderMenu(false);
+                  if (r.ok) router.back();
+                  else setSendError(r.error.message);
+                }}>
+                <Ionicons name="eye-off-outline" size={18} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.menuText}>Hide this conversation</Text>
+                  <Text style={styles.menuFine}>Only removes it from your inbox. {name} still sees it, and it comes back if either of you writes again.</Text>
+                </View>
+              </Pressable>
+            )}
             <Pressable accessibilityRole="button" style={styles.menuRow} onPress={() => { setHeaderMenu(false); setConfirmDeleteConversation(true); }}>
               <Ionicons name="trash-outline" size={18} color="#D64545" />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.menuText, { color: '#D64545' }]}>Delete this conversation</Text>
-                <Text style={styles.menuFine}>Removes it from your inbox only. {name} keeps it, and it comes back if either of you writes again.</Text>
+                <Text style={styles.menuFine}>Clears your copy of the messages. {name} keeps the full history. If they write again, you start from a fresh conversation.</Text>
               </View>
             </Pressable>
           </View>
@@ -205,16 +226,18 @@ function Content() {
                 if (m.kind === 'viewing_event') {
                   return (
                     <View style={styles.cardWrap}>
-                      <ViewingEventCard message={m} siblings={thread?.messages ?? []} />
+                      <ViewingEventCard message={m} siblings={thread?.messages ?? []} superseded={superseded.has(m.id)} />
                     </View>
                   );
                 }
                 const mine = m.senderId === user?.id;
                 const bubble = <MessageBubble message={m} mine={mine} read={mine && m.id === lastMine && isReadByCounterpart(m, thread?.counterpartLastReadAt ?? null)} />;
-                // Own normal messages can be edited or deleted for 20 minutes after they were sent: swipe right.
+                // Own normal messages can be edited or deleted for 20 minutes after they were sent: swipe LEFT (a right swipe is the
+                // screen's back gesture, so it is never used on a message).
                 if (!(user && canModifyMessage(m, user.id, now))) return bubble;
                 return (
                   <SwipeableRow
+                    direction="left"
                     backgroundColor={colors.background}
                     open={openRowId === m.id}
                     onOpenChange={(o) => setOpenRowId(o ? m.id : null)}
@@ -295,7 +318,7 @@ function Content() {
         <ConfirmDialog
           visible={confirmDeleteConversation}
           title="Delete this conversation?"
-          message={`It is removed from your inbox and Hidden list. ${name} still has it, and it returns if either of you sends a new message.`}
+          message={`Your old messages and viewing updates are cleared from your view. ${name} keeps the full history. If they write again, you will only see the new message.`}
           confirmLabel="Delete conversation"
           destructive
           onCancel={() => setConfirmDeleteConversation(false)}

@@ -63,6 +63,7 @@ function Content() {
             return (
               <SwipeableRow
                 key={n.id}
+                direction="left"
                 backgroundColor={colors.background}
                 open={openId === n.id}
                 onOpenChange={(o) => setOpenId(o ? n.id : null)}

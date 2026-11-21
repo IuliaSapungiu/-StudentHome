@@ -9,9 +9,9 @@ export type SearchPreset = Partial<SearchState>;
 export const HOME_UNIVERSITY = 'ASE';
 
 export const presetAll = (): SearchPreset => ({});
-export const presetNearUniversity = (university: string): SearchPreset => ({ university });
+export const presetNearUniversity = (university: string): SearchPreset => ({ universities: [university] });
 export const presetUnderBudget = (maxRon: number = QUICK_BUDGET_RON): SearchPreset => ({ budget: { minRon: null, maxRon } });
-export const presetCity = (city: string): SearchPreset => ({ city });
+export const presetCity = (city: string): SearchPreset => ({ cities: [city] });
 
 /** A fresh, valid search state for a preset (list view, recommended sort, nothing else set). */
 export const stateFromPreset = (preset: SearchPreset = {}): SearchState => normalizeSearchState({ ...defaultSearchState(), ...preset });

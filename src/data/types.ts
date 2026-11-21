@@ -77,12 +77,16 @@ export type CitySummary = { name: string; homeCount: number; image: string };
 
 export type SortOption = 'recommended' | 'price_asc' | 'price_desc';
 
+import type { BathroomBand, DistanceBand } from './filterBands';
+export type { BathroomBand, DistanceBand } from './filterBands';
+
 export type PropertySearchQuery = {
   /** Free text: matches title, city, area or university (accent- and case-insensitive). */
   text?: string;
-  city?: string;
-  /** University short name, e.g. "ASE". */
-  university?: string;
+  /** Several cities are OR-ed: a home in any of them matches. */
+  cities?: string[];
+  /** University short names, e.g. ["ASE", "UPT"]. OR-ed. */
+  universities?: string[];
   /**
    * Budget limits as RON-EQUIVALENT amounts. A listing priced in EUR is converted with the current
    * exchange-rate snapshot before it is compared, so filtering is identical whatever display
@@ -93,9 +97,10 @@ export type PropertySearchQuery = {
   types?: PropertyType[];
   /** 0 = studio; 3 means "3 or more". Multiple values are OR-ed. */
   bedrooms?: number[];
-  minBathrooms?: number;
-  maxBathrooms?: number;
-  maxMinutesToUniversity?: number;
+  /** OR-ed bathroom choices (see filterBands.ts). */
+  bathrooms?: BathroomBand[];
+  /** OR-ed distance bands to the nearest university (see filterBands.ts). */
+  distances?: DistanceBand[];
   /** Every listed amenity must be present. */
   amenities?: Amenity[];
   verifiedOnly?: boolean;

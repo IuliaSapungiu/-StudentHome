@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,6 +14,7 @@ import { formatDateLong, localDate } from '@/lib/dateTime';
 import { RequireAccount } from '@/features/session/RequireAccount';
 import { useOpenConversation } from '@/features/messaging/useOpenConversation';
 import { useApplications } from '@/features/applications/ApplicationsProvider';
+import { useNotifications } from '@/features/notifications/NotificationsProvider';
 import { isActiveApplication, STATUS_LABEL, STUDY_STATUS_LABEL } from '@/features/applications/applicationRules';
 
 export default function ApplicationDetailScreen() {
@@ -29,6 +30,13 @@ function Content() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { applications, ready, withdraw } = useApplications();
   const app = applications.find((a) => a.id === id);
+  const { markEntityRead } = useNotifications();
+  // This screen IS the exact application: opening it (from the list, a notification or a link) marks the notifications about
+  // it as read. The Applications list alone never does.
+  const openedId = app?.id;
+  useEffect(() => {
+    if (openedId) void markEntityRead('application', openedId);
+  }, [openedId, markEntityRead]);
   const { byId } = usePropertiesById(app ? [app.propertyId] : []);
   const messageGate = useOpenConversation();
   const [confirming, setConfirming] = useState(false);

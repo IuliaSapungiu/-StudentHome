@@ -1,9 +1,9 @@
-import { useEffect, useReducer } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ImageStyle } from 'react-native';
 import { Image as CachedImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme';
-import { imageCacheKey, initialImageState, reduceImage, retryDelayMs } from '@/lib/imageLoading';
+import { imageCacheKey, initialImageState, isStaleImageEvent, reduceImage, retryDelayMs, type ImageLoadEvent } from '@/lib/imageLoading';
 
 type Props = {
   uri: string | null | undefined;
@@ -21,6 +21,18 @@ type Props = {
  */
 export function PropertyImage({ uri, style, accessibilityLabel, compact }: Props) {
   const [state, dispatch] = useReducer(reduceImage, uri ?? null, initialImageState);
+  const latest = useRef(state);
+  latest.current = state;
+  // Every report from the image says which load it belongs to (see lib/imageLoading.ts), so a late event from an older
+  // source or an earlier retry cannot change the current photo's state. In development, such a stray report and every
+  // real failure are logged, to help find the cause if a photo ever goes missing again.
+  const report = (e: ImageLoadEvent) => {
+    if (__DEV__) {
+      if (isStaleImageEvent(latest.current, e)) console.warn('[PropertyImage] ignored a stale image event', { event: e, current: { uri: latest.current.uri, nonce: latest.current.nonce, status: latest.current.status } });
+      else if (e.type === 'failed') console.warn('[PropertyImage] load failed', { uri: latest.current.uri, attempt: latest.current.attempts + 1, nonce: latest.current.nonce });
+    }
+    dispatch(e);
+  };
 
   useEffect(() => {
     dispatch({ type: 'source', uri: uri ?? null });
@@ -43,8 +55,8 @@ export function PropertyImage({ uri, style, accessibilityLabel, compact }: Props
           transition={150}
           accessibilityLabel={accessibilityLabel}
           style={StyleSheet.absoluteFill}
-          onLoad={() => dispatch({ type: 'loaded' })}
-          onError={() => dispatch({ type: 'failed' })}
+          onLoad={() => report({ type: 'loaded', uri: state.uri, nonce: state.nonce })}
+          onError={() => report({ type: 'failed', uri: state.uri, nonce: state.nonce })}
         />
       ) : null}
       {state.status === 'error' ? (

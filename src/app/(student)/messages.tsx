@@ -125,7 +125,7 @@ function Content() {
       <ConfirmDialog
         visible={confirmDelete !== null}
         title="Delete this conversation?"
-        message="It is removed from your inbox and Hidden list only. The other person keeps it, and it comes back if either of you sends a new message."
+        message="Your old messages and viewing updates are cleared from your view only. The other person keeps the full history. If they write again, you will only see the new message."
         confirmLabel="Delete conversation"
         destructive
         onCancel={() => setConfirmDelete(null)}

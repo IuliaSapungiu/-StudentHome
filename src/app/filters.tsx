@@ -21,24 +21,22 @@ import { budgetFromThumbs, thumbsFromBudget } from '@/features/search/rangeSlide
 import { useSearch } from '@/features/search/SearchProvider';
 import {
   AMENITIES,
+  BATHROOM_CHOICES,
+  BATHROOM_LABEL,
   BEDROOM_CHOICES,
+  DISTANCE_CHOICES,
+  DISTANCE_LABEL,
   PROPERTY_TYPES,
   SORT_LABEL,
   SORT_OPTIONS,
   queryKey,
   resetFilters,
   toQuery,
-  type BathroomChoice,
   type SearchState,
 } from '@/features/search/searchState';
 import { formatIsoDate, fromIsoDate, toIsoDate } from '@/lib/dates';
 
 const BEDROOM_LABEL = (n: number) => (n === 0 ? 'Studio' : n >= 3 ? '3+' : String(n));
-const BATH_CHOICES: { value: BathroomChoice; label: string }[] = [
-  { value: 'any', label: 'Any' },
-  { value: 'one', label: '1' },
-  { value: 'two_plus', label: '2+' },
-];
 const toggleIn = <T,>(list: T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
 export default function FiltersScreen() {
@@ -127,7 +125,11 @@ export default function FiltersScreen() {
     setState({ ...draft, budget: r.budget });
     setCurrency(draftCurrency);
     Keyboard.dismiss(); // the keyboard stays closed when the results appear
-    router.navigate('/search');
+    // Filters is a screen pushed OVER the tabs. Since Expo Router 4, `navigate` is the same as `push`, so using it here
+    // would stack a second Search on top of Filters and leave Filters in the history (the back swipe then reopened it).
+    // `dismissTo` closes Filters and returns to the Search tab that is already underneath. The filters themselves live in
+    // SearchProvider (set just above), so closing this screen loses nothing.
+    router.dismissTo('/search');
   };
 
   const showLabel = count === null ? 'Show homes' : count === 1 ? 'Show 1 home' : `Show ${count} homes`;
@@ -146,18 +148,18 @@ export default function FiltersScreen() {
         <ContentContainer maxWidth={680}>
           <FilterSection title="City">
             <ChipRow>
-              <Chip label="Any city" selected={draft.city === null} onPress={() => patch({ city: null })} />
+              <Chip label="Any city" selected={draft.cities.length === 0} onPress={() => patch({ cities: [] })} />
               {cities.map((c) => (
-                <Chip key={c.name} label={c.name} selected={draft.city === c.name} onPress={() => patch({ city: c.name })} />
+                <Chip key={c.name} label={c.name} selected={draft.cities.includes(c.name)} onPress={() => patch({ cities: toggleIn(draft.cities, c.name) })} />
               ))}
             </ChipRow>
           </FilterSection>
 
           <FilterSection title="University">
             <ChipRow>
-              <Chip label="Any university" selected={draft.university === null} onPress={() => patch({ university: null })} />
+              <Chip label="Any university" selected={draft.universities.length === 0} onPress={() => patch({ universities: [] })} />
               {universities.map((u) => (
-                <Chip key={u} label={u} selected={draft.university === u} onPress={() => patch({ university: u })} />
+                <Chip key={u} label={u} selected={draft.universities.includes(u)} onPress={() => patch({ universities: toggleIn(draft.universities, u) })} />
               ))}
             </ChipRow>
           </FilterSection>
@@ -221,9 +223,10 @@ export default function FiltersScreen() {
 
           <FilterSection title="Distance to university">
             <ChipRow>
-              <Chip label="Any distance" selected={draft.maxMinutesToUniversity === null} onPress={() => patch({ maxMinutesToUniversity: null })} />
-              <Chip label="Under 15 min" selected={draft.maxMinutesToUniversity === 15} onPress={() => patch({ maxMinutesToUniversity: 15 })} />
-              <Chip label="Under 30 min" selected={draft.maxMinutesToUniversity === 30} onPress={() => patch({ maxMinutesToUniversity: 30 })} />
+              <Chip label="Any distance" selected={draft.distances.length === 0} onPress={() => patch({ distances: [] })} />
+              {DISTANCE_CHOICES.map((d) => (
+                <Chip key={d} label={DISTANCE_LABEL[d]} selected={draft.distances.includes(d)} onPress={() => patch({ distances: toggleIn(draft.distances, d) })} />
+              ))}
             </ChipRow>
           </FilterSection>
 
@@ -237,8 +240,9 @@ export default function FiltersScreen() {
 
           <FilterSection title="Bathrooms">
             <ChipRow>
-              {BATH_CHOICES.map((b) => (
-                <Chip key={b.value} label={b.label} selected={draft.bathrooms === b.value} onPress={() => patch({ bathrooms: b.value })} />
+              <Chip label="Any" selected={draft.bathrooms.length === 0} onPress={() => patch({ bathrooms: [] })} />
+              {BATHROOM_CHOICES.map((b) => (
+                <Chip key={b} label={BATHROOM_LABEL[b]} selected={draft.bathrooms.includes(b)} onPress={() => patch({ bathrooms: toggleIn(draft.bathrooms, b) })} />
               ))}
             </ChipRow>
           </FilterSection>

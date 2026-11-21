@@ -1,5 +1,6 @@
 import { toRon } from '../features/currency/money';
 import type { ExchangeRateSnapshot } from '../features/currency/types';
+import { matchesBathroomBand, matchesDistanceBand } from './filterBands';
 import { hasHigherRanking, isPublic, isVerified } from './listing';
 import type { Property, PropertySearchQuery } from './types';
 
@@ -23,15 +24,15 @@ export function filterProperties(all: Property[], q: PropertySearchQuery = {}, r
       const haystack = normalize(`${p.title} ${p.city} ${p.area} ${p.nearestUniversity.name}`);
       if (!haystack.includes(text)) return false;
     }
-    if (q.city && normalize(p.city) !== normalize(q.city)) return false;
-    if (q.university && normalize(p.nearestUniversity.name) !== normalize(q.university)) return false;
+    // Inside one filter, several choices are OR-ed. Different filters are AND-ed (every check below must pass).
+    if (q.cities?.length && !q.cities.some((c) => normalize(c) === normalize(p.city))) return false;
+    if (q.universities?.length && !q.universities.some((u) => normalize(u) === normalize(p.nearestUniversity.name))) return false;
     if (q.minRentRon !== undefined && priceRon(p) < q.minRentRon) return false;
     if (q.maxRentRon !== undefined && priceRon(p) > q.maxRentRon) return false;
     if (q.types?.length && !q.types.includes(p.type)) return false;
     if (q.bedrooms?.length && !q.bedrooms.some((b) => (b >= 3 ? p.bedrooms >= 3 : p.bedrooms === b))) return false;
-    if (q.minBathrooms !== undefined && p.bathrooms < q.minBathrooms) return false;
-    if (q.maxBathrooms !== undefined && p.bathrooms > q.maxBathrooms) return false;
-    if (q.maxMinutesToUniversity !== undefined && p.nearestUniversity.minutes > q.maxMinutesToUniversity) return false;
+    if (q.bathrooms?.length && !q.bathrooms.some((b) => matchesBathroomBand(p.bathrooms, b))) return false;
+    if (q.distances?.length && !q.distances.some((d) => matchesDistanceBand(p.nearestUniversity.minutes, d))) return false;
     if (q.amenities?.length && !q.amenities.every((a) => p.amenities.includes(a))) return false;
     if (q.verifiedOnly && !isVerified(p)) return false;
     if (q.availableBy && p.availableFrom > q.availableBy) return false;

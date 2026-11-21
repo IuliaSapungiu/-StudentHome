@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme';
-import { dragOffset, isHorizontalSwipe, shouldOpenAfterRelease } from '@/lib/swipe';
+import { claimsSwipe, dragOffset, shiftFor, shouldOpenAfterRelease, type SwipeDirection } from '@/lib/swipe';
 
 export type SwipeAction = { key: string; label: string; tone: 'neutral' | 'danger' | 'primary'; onPress: () => void };
 
 type Props = {
-  /** Shown, in order, when the row is swiped to the right. */
+  /** Shown, in order, when the row is swiped in `direction`. */
   actions: SwipeAction[];
+  /**
+   * Which way to swipe. 'right' (default) is for Messages list rows. Use 'left' wherever a right swipe would collide with
+   * the screen's back gesture (single messages in a chat, notification rows): the actions then appear on the right edge.
+   */
+  direction?: SwipeDirection;
   /** False turns the gesture off (the row then behaves like a plain row). */
   enabled?: boolean;
   open: boolean;
@@ -21,27 +26,29 @@ const ACTION_W = 84;
 const TONES = { neutral: '#5F6B66', danger: '#D64545', primary: colors.primary };
 
 /**
- * Swipe a row to the RIGHT to reveal labelled actions (built with PanResponder + Animated, no extra dependency; works
+ * Swipe a row (to the right by default, or to the left with `direction="left"`) to reveal labelled actions (built with PanResponder + Animated, no extra dependency; works
  * the same on iOS, Android and web). A swipe only starts when the movement is clearly horizontal, so normal vertical
  * scrolling is never taken over; once it has started the row keeps it. Screen readers get the same actions through
  * accessibility actions, since a swipe is not available to everyone.
  */
-export function SwipeableRow({ actions, enabled = true, open, onOpenChange, backgroundColor = colors.surface, children }: Props) {
+export function SwipeableRow({ actions, direction = 'right', enabled = true, open, onOpenChange, backgroundColor = colors.surface, children }: Props) {
   const width = actions.length * ACTION_W;
   const x = useRef(new Animated.Value(0)).current;
   const openRef = useRef(open);
   const widthRef = useRef(width);
   const enabledRef = useRef(enabled);
   const onChange = useRef(onOpenChange);
+  const directionRef = useRef(direction);
+  directionRef.current = direction;
   openRef.current = open;
   widthRef.current = width;
   enabledRef.current = enabled;
   onChange.current = onOpenChange;
 
-  const settle = (toOpen: boolean) => Animated.spring(x, { toValue: toOpen ? widthRef.current : 0, useNativeDriver: true, bounciness: 0, speed: 20 }).start();
-  useEffect(() => settle(open && enabled), [open, enabled, width]); // eslint-disable-line react-hooks/exhaustive-deps
+  const settle = (toOpen: boolean) => Animated.spring(x, { toValue: toOpen ? shiftFor(widthRef.current, directionRef.current) : 0, useNativeDriver: true, bounciness: 0, speed: 20 }).start();
+  useEffect(() => settle(open && enabled), [open, enabled, width, direction]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const horizontal = (_: unknown, g: { dx: number; dy: number }) => enabledRef.current && isHorizontalSwipe(g.dx, g.dy);
+  const horizontal = (_: unknown, g: { dx: number; dy: number }) => enabledRef.current && claimsSwipe(openRef.current, g.dx, g.dy, directionRef.current);
   const responder = useMemo(
     () =>
       PanResponder.create({
@@ -49,10 +56,10 @@ export function SwipeableRow({ actions, enabled = true, open, onOpenChange, back
         onMoveShouldSetPanResponderCapture: horizontal,
         onPanResponderTerminationRequest: () => false,
         onPanResponderMove: (_, g) => {
-          x.setValue(dragOffset(openRef.current, g.dx, widthRef.current));
+          x.setValue(dragOffset(openRef.current, g.dx, widthRef.current, directionRef.current));
         },
         onPanResponderRelease: (_, g) => {
-          const shouldOpen = shouldOpenAfterRelease(openRef.current, g.dx, g.vx, widthRef.current);
+          const shouldOpen = shouldOpenAfterRelease(openRef.current, g.dx, g.vx, widthRef.current, directionRef.current);
           settle(shouldOpen);
           if (shouldOpen !== openRef.current) onChange.current(shouldOpen);
         },
@@ -68,7 +75,7 @@ export function SwipeableRow({ actions, enabled = true, open, onOpenChange, back
       accessible={false}
       accessibilityActions={actions.map((a) => ({ name: a.key, label: a.label }))}
       onAccessibilityAction={(e) => actions.find((a) => a.key === e.nativeEvent.actionName)?.onPress()}>
-      <View style={[styles.actions, { width }]}>
+      <View style={[styles.actions, direction === 'left' ? styles.actionsRight : null, { width }]}>
         {actions.map((a) => (
           <Pressable key={a.key} accessibilityRole="button" accessibilityLabel={a.label} onPress={() => { onOpenChange(false); a.onPress(); }} style={[styles.action, { backgroundColor: TONES[a.tone] }]}>
             <Text style={styles.actionText}>{a.label}</Text>
@@ -86,6 +93,7 @@ export function SwipeableRow({ actions, enabled = true, open, onOpenChange, back
 const styles = StyleSheet.create({
   wrap: { overflow: 'hidden' },
   actions: { position: 'absolute', left: 0, top: 0, bottom: 0, flexDirection: 'row' },
+  actionsRight: { left: undefined, right: 0 },
   action: { width: ACTION_W, alignItems: 'center', justifyContent: 'center' },
   actionText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 });

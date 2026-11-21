@@ -49,12 +49,12 @@ const fmt = (ron: number) => `${ron} lei`;
   const full: SearchState = {
     ...d,
     text: '  ase  ',
-    city: 'Bucharest',
-    university: 'ASE',
+    cities: ['Bucharest'],
+    universities: ['ASE'],
     budget: { minRon: 1500, maxRon: 2500 },
-    maxMinutesToUniversity: 15,
+    distances: ['within_15'],
     bedrooms: [0, 1],
-    bathrooms: 'one',
+    bathrooms: ['one'],
     types: ['studio', 'shared_room'],
     availableBy: '2026-11-15',
     amenities: ['furnished', 'wifi'],
@@ -64,31 +64,30 @@ const fmt = (ron: number) => `${ron} lei`;
   assert.deepEqual(toQuery(full), {
     sort: 'price_asc',
     text: 'ase',
-    city: 'Bucharest',
-    university: 'ASE',
+    cities: ['Bucharest'],
+    universities: ['ASE'],
     minRentRon: 1500,
     maxRentRon: 2500,
-    maxMinutesToUniversity: 15,
+    distances: ['within_15'],
     bedrooms: [0, 1],
-    minBathrooms: 1,
-    maxBathrooms: 1,
+    bathrooms: ['one'],
     types: ['studio', 'shared_room'],
     availableBy: '2026-11-15',
     amenities: ['furnished', 'wifi'],
     verifiedOnly: true,
   });
-  assert.deepEqual(toQuery({ ...d, bathrooms: 'two_plus' }), { sort: 'recommended', minBathrooms: 2 });
+  assert.deepEqual(toQuery({ ...d, bathrooms: ['two_plus'] }), { sort: 'recommended', bathrooms: ['two_plus'] });
   assert.equal(queryKey(d), queryKey(defaultSearchState()));
   assert.notEqual(queryKey(d), queryKey({ ...d, verifiedOnly: true }));
 
   // ---- Validation / normalisation ----
   const dirty = normalizeSearchState({
     text: 'x'.repeat(300),
-    city: '   ',
+    cities: ['   ', 'Iași', 'iași', 'Bucharest'],
     budget: { minRon: 3000, maxRon: 1000 }, // reversed
-    maxMinutesToUniversity: 99,
+    distances: ['within_30', 'far_far_away' as never, 'within_15', 'within_30'],
     bedrooms: [2, 2, 9, -1, 0],
-    bathrooms: 'lots' as never,
+    bathrooms: ['lots' as never, 'two_plus', 'one', 'one'],
     types: ['studio', 'castle' as never, 'studio'],
     availableBy: '2026-02-31',
     amenities: ['wifi', 'wifi', 'jacuzzi' as never],
@@ -96,11 +95,11 @@ const fmt = (ron: number) => `${ron} lei`;
     view: 'sideways' as never,
   });
   assert.equal(dirty.text.length, 100);
-  assert.equal(dirty.city, null);
+  assert.deepEqual(dirty.cities, ['Bucharest', 'Iași'], 'blank values dropped, duplicates (any letter case) merged, order made stable');
   assert.deepEqual(dirty.budget, { minRon: 1000, maxRon: 3000 });
-  assert.equal(dirty.maxMinutesToUniversity, null);
+  assert.deepEqual(dirty.distances, ['within_15', 'within_30'], 'unknown bands dropped, canonical order');
   assert.deepEqual(dirty.bedrooms, [0, 2]);
-  assert.equal(dirty.bathrooms, 'any');
+  assert.deepEqual(dirty.bathrooms, ['one', 'two_plus'], 'unknown choices dropped, canonical order');
   assert.deepEqual(dirty.types, ['studio']);
   assert.equal(dirty.availableBy, null);
   assert.deepEqual(dirty.amenities, ['wifi']);
@@ -148,17 +147,17 @@ const fmt = (ron: number) => `${ron} lei`;
   // ---- Result wording and summaries ----
   assert.equal(describeResultCount(11, d), '11 homes');
   assert.equal(describeResultCount(1, d), '1 home');
-  assert.equal(describeResultCount(4, { ...d, city: 'Bucharest' }), '4 homes in Bucharest');
-  assert.equal(describeResultCount(2, { ...d, university: 'ASE', city: 'Bucharest' }), '2 homes near ASE');
+  assert.equal(describeResultCount(4, { ...d, cities: ['Bucharest'] }), '4 homes in Bucharest');
+  assert.equal(describeResultCount(2, { ...d, universities: ['ASE'], cities: ['Bucharest'] }), '2 homes near ASE');
   assert.equal(summarizeFilters(d), '');
-  assert.equal(summarizeFilters({ ...d, university: 'ASE', availableBy: '2026-11-15' }), 'Near ASE · Move-in 15 Nov 2026');
-  assert.equal(summarizeFilters({ ...d, city: 'Cluj-Napoca', verifiedOnly: true }), 'Cluj-Napoca · 2 filters');
+  assert.equal(summarizeFilters({ ...d, universities: ['ASE'], availableBy: '2026-11-15' }), 'Near ASE · Move-in 15 Nov 2026');
+  assert.equal(summarizeFilters({ ...d, cities: ['Cluj-Napoca'], verifiedOnly: true }), 'Cluj-Napoca · 2 filters');
 
   // ---- Home presets ----
   assert.deepEqual(stateFromPreset(presetAll()), defaultSearchState());
-  assert.equal(stateFromPreset(presetNearUniversity(HOME_UNIVERSITY)).university, 'ASE');
+  assert.deepEqual(stateFromPreset(presetNearUniversity(HOME_UNIVERSITY)).universities, ['ASE']);
   assert.deepEqual(stateFromPreset(presetUnderBudget()).budget, { minRon: null, maxRon: 2500 });
-  assert.equal(stateFromPreset(presetCity('Cluj-Napoca')).city, 'Cluj-Napoca');
+  assert.deepEqual(stateFromPreset(presetCity('Cluj-Napoca')).cities, ['Cluj-Napoca']);
   assert.equal(activeFilterCount(stateFromPreset(presetCity('Iași'))), 1, 'a preset sets exactly its own filter');
   assert.ok(isQuickChipActive(stateFromPreset(presetUnderBudget(QUICK_BUDGET_RON)), 'budget'));
 
@@ -166,16 +165,16 @@ const fmt = (ron: number) => `${ron} lei`;
   assert.deepEqual(parseSearchParams({}), {});
   assert.deepEqual(parseSearchParams({ city: ['Iași', 'x'], q: ' ase ', uni: 'ASE', verified: '1', view: 'map' }), {
     text: 'ase',
-    city: 'Iași',
-    university: 'ASE',
+    cities: ['Iași'],
+    universities: ['ASE'],
     verifiedOnly: true,
     view: 'map',
   });
   assert.deepEqual(parseSearchParams({ min: '1500', max: '2500', maxMin: '15', beds: '0,2,x', baths: '2+', types: 'studio,castle', by: '2026-11-01', amenities: 'wifi,jacuzzi', sort: 'price_desc' }), {
     budget: { minRon: 1500, maxRon: 2500 },
-    maxMinutesToUniversity: 15,
+    distances: ['within_15'], // the older ?maxMin=15 link still means "up to 15 minutes"
     bedrooms: [0, 2],
-    bathrooms: 'two_plus',
+    bathrooms: ['two_plus'],
     types: ['studio'],
     availableBy: '2026-11-01',
     amenities: ['wifi'],
@@ -183,7 +182,7 @@ const fmt = (ron: number) => `${ron} lei`;
   });
   // invalid values are ignored, never thrown
   assert.deepEqual(parseSearchParams({ min: '-5', max: 'abc', maxMin: '99', by: '2026-13-01', sort: 'cheapest', verified: 'no', view: 'sideways', baths: '7' }), {});
-  assert.deepEqual(searchStateFromParams({ city: 'Cluj-Napoca' }).city, 'Cluj-Napoca');
+  assert.deepEqual(searchStateFromParams({ city: 'Cluj-Napoca' }).cities, ['Cluj-Napoca']);
   assert.deepEqual(searchStateFromParams({ nonsense: '1' }), defaultSearchState());
   // state -> params -> state round-trips
   assert.deepEqual(searchStateFromParams(searchStateToParams(full)), normalizeSearchState({ ...full, text: 'ase' }), 'text is trimmed in the URL');
@@ -275,11 +274,11 @@ const fmt = (ron: number) => `${ron} lei`;
   // ---- List / Map consistency: one filtered array feeds both ----
   const states: SearchState[] = [
     d,
-    { ...d, city: 'Bucharest' },
+    { ...d, cities: ['Bucharest'] },
     { ...d, verifiedOnly: true, sort: 'price_desc' },
     { ...d, budget: { minRon: null, maxRon: 2500 }, types: ['studio', 'apartment'] },
     { ...d, text: 'timisoara', view: 'map' },
-    { ...d, university: 'Politehnica', bathrooms: 'one' },
+    { ...d, universities: ['Politehnica'], bathrooms: ['one'] },
     { ...d, budget: { minRon: 99999, maxRon: null } }, // matches nothing
   ];
   for (const s of states) {

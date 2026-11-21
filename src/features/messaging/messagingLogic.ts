@@ -19,9 +19,30 @@ export function unreadCount(messages: Message[], userId: string, lastReadAt: str
   return messages.filter((m) => m.senderId !== userId && (lastReadAt === null || m.createdAt > lastReadAt)).length;
 }
 
+/**
+ * The messages and status cards one person may see: everything in the conversation created AFTER their history cutoff
+ * (`clearedAt`, set when they deleted the conversation). With no cutoff, everything. This is the only place the rule
+ * lives, so the list, the unread counts and the open conversation can never disagree.
+ */
+export const visibleTo = <T extends Pick<Message, 'createdAt'>>(messages: T[], clearedAt: string | null): T[] =>
+  clearedAt === null ? messages : messages.filter((m) => m.createdAt > clearedAt);
+
+/**
+ * The timestamp for a NEW message: `at`, but never at or before any participant's history cutoff. A message added after
+ * someone deleted the conversation must always count as "after" that deletion, even when both happen within the same
+ * millisecond (a coarse clock, a frozen test clock). Otherwise a brand-new message could be hidden as "old".
+ */
+export function afterCutoffs(at: string, cutoffs: (string | null)[]): string {
+  let latest = at;
+  for (const c of cutoffs) {
+    if (c !== null && c >= latest) latest = new Date(new Date(c).getTime() + 1).toISOString();
+  }
+  return latest;
+}
+
 export function summarize(c: Conversation, messages: Message[], reads: ParticipantRead[], userId: string): ConversationSummary {
-  const own = messages.filter((m) => m.conversationId === c.id).sort(byTime);
   const mine = reads.find((r) => r.conversationId === c.id && r.userId === userId);
+  const own = visibleTo(messages.filter((m) => m.conversationId === c.id), mine?.clearedAt ?? null).sort(byTime);
   const lastReadAt = mine?.lastReadAt ?? null;
   return { conversation: c, lastMessage: own[own.length - 1] ?? null, unreadCount: unreadCount(own, userId, lastReadAt), hidden: !!mine?.hiddenAt && !mine?.deletedAt, deleted: !!mine?.deletedAt };
 }
@@ -108,3 +129,24 @@ export function eventCardLines(s: EventCardSnapshot): { primary: string | null; 
 
 /** The inbox (`hidden = false`) or the Hidden list (`hidden = true`). Deleted conversations are in neither. */
 export const visibleSummaries = (list: ConversationSummary[], hidden: boolean): ConversationSummary[] => list.filter((s) => !s.deleted && s.hidden === hidden);
+
+// ---- viewing status cards that a newer card has replaced ---------------------------------------------------
+
+/**
+ * Status cards that a LATER card of the SAME viewing request has replaced. One formal viewing request is one lifecycle
+ * (requested, proposed, rescheduled, confirmed, ...) with one current status, so within it only the newest card is the
+ * current one and every earlier card is history. Cards of a different viewing request are independent: each keeps its own
+ * current card. Text messages are never included. Pass the messages the person can see (see `visibleTo`).
+ */
+export function supersededCardIds(messages: Message[]): Set<string> {
+  const latest = new Map<string, Message>();
+  for (const m of [...messages].sort(byTime)) {
+    if (m.kind === 'viewing_event' && m.viewingRequestId) latest.set(m.viewingRequestId, m);
+  }
+  const out = new Set<string>();
+  for (const m of messages) {
+    if (m.kind !== 'viewing_event' || !m.viewingRequestId) continue;
+    if (latest.get(m.viewingRequestId)?.id !== m.id) out.add(m.id);
+  }
+  return out;
+}

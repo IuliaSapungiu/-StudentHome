@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import assert from 'node:assert/strict';
 import { consumeFocus, focusActionOnArrival, initialSearchRequests, onPresetApplied } from './searchRequests';
-import { isHorizontalSwipe, shouldOpenAfterRelease, dragOffset } from '../../lib/swipe';
+import { isHorizontalSwipe, shouldOpenAfterRelease, dragOffset, shiftFor, claimsSwipe } from '../../lib/swipe';
 
 // ---- keyboard: only an explicit request from Home's search bar opens it, once
 let r = initialSearchRequests;
@@ -46,5 +46,28 @@ assert.equal(shouldOpenAfterRelease(false, 80, 0, 168), true, 'pulled past 40%')
 assert.equal(shouldOpenAfterRelease(false, 40, 0, 168), false, 'not far enough');
 assert.equal(shouldOpenAfterRelease(false, 20, 0.6, 168), true, 'a quick flick right opens');
 assert.equal(shouldOpenAfterRelease(true, -10, -0.6, 168), false, 'a quick flick left closes');
+
+// ---- swipe LEFT (single messages and notification rows: a right swipe would be the back gesture)
+assert.equal(dragOffset(false, -60, 84, 'left'), 60, 'a closed row follows a LEFT drag');
+assert.equal(dragOffset(false, 60, 84, 'left'), 0, 'a closed row cannot be pulled to the right: that gesture is left to the back swipe');
+assert.equal(dragOffset(false, -900, 84, 'left'), 100, 'overshoot is capped');
+assert.equal(dragOffset(true, 40, 84, 'left'), 44, 'an open row follows the finger back to the right');
+assert.equal(shouldOpenAfterRelease(false, -50, 0, 84, 'left'), true, 'pulled left past 40%');
+assert.equal(shouldOpenAfterRelease(false, 80, 0, 84, 'left'), false, 'a right swipe never opens a left-swipe row');
+assert.equal(shouldOpenAfterRelease(false, -10, -0.6, 84, 'left'), true, 'a quick flick left opens');
+assert.equal(shouldOpenAfterRelease(true, 10, 0.6, 84, 'left'), false, 'a quick flick right closes');
+assert.equal(shiftFor(84, 'left'), -84, 'the row slides to the left');
+assert.equal(shiftFor(84, 'right'), 84);
+assert.equal(shiftFor(84), 84, 'right stays the default (Messages list rows are unchanged)');
+assert.equal(shouldOpenAfterRelease(false, 80, 0, 168), true, 'the default direction behaves exactly as before');
+
+// a left-swipe row never takes a rightward drag on a closed row: that is the screen's back gesture
+assert.equal(claimsSwipe(false, 30, 2, 'left'), false, 'a closed left-swipe row ignores a swipe to the right (back gesture)');
+assert.equal(claimsSwipe(false, -30, 2, 'left'), true, 'but takes a swipe to the left');
+assert.equal(claimsSwipe(true, 30, 2, 'left'), true, 'an open one accepts a swipe back to the right, to close');
+assert.equal(claimsSwipe(false, -30, 40, 'left'), false, 'diagonal / vertical drags still belong to scrolling');
+assert.equal(claimsSwipe(false, 30, 2, 'right'), true, 'Messages list rows (swipe right) behave exactly as before');
+assert.equal(claimsSwipe(false, -30, 2, 'right'), true, 'including taking a leftward drag, as before');
+assert.equal(claimsSwipe(false, 30, 2), true, 'default direction = right');
 
 console.log('searchRequests: all checks passed');

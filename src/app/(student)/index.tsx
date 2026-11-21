@@ -54,7 +54,7 @@ export default function HomeScreen() {
     Promise.all([
       propertyRepository.getFeatured(6),
       propertyRepository.getCities(),
-      propertyRepository.search({ university: 'ASE' }),
+      propertyRepository.search({ universities: ['ASE'] }),
     ]).then(([featured, cities, nearAse]) => alive && setData({ featured, cities, nearAse }));
     return () => {
       alive = false;

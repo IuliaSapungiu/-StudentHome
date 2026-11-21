@@ -49,6 +49,16 @@ export function createMockNotificationRepository(deps: { store: NotificationStor
         return { rows: next, result: count };
       });
     },
+    markEntityRead(userId, entityType, entityId) {
+      return store.update((rows) => {
+        const at = now().toISOString();
+        let count = 0;
+        const next = rows.map((n) =>
+          n.userId === userId && n.deletedAt === null && n.readAt === null && n.entityType === entityType && n.entityId === entityId ? (count++, { ...n, readAt: at }) : n,
+        );
+        return { rows: count > 0 ? next : rows, result: count };
+      });
+    },
     delete(userId, id) {
       return store.update((rows) => {
         const target = rows.find((n) => n.id === id && n.userId === userId && n.deletedAt === null);

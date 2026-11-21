@@ -44,9 +44,9 @@ const ron = (p: { rent: PropertyRecord['rent'] }) => toRon(p.rent, rate);
   assert.ok(rec.slice(firstBasic).every((p) => p.planId === 'basic'));
 
   // Filters
-  assert.ok((await repo.search({ city: 'iasi' })).every((p) => p.city === 'Iași')); // accent-insensitive
+  assert.ok((await repo.search({ cities: ['iasi'] })).every((p) => p.city === 'Iași')); // accent-insensitive
   assert.ok((await repo.search({ maxRentRon: 2000 })).every((p) => ron(p) <= 2000));
-  assert.ok((await repo.search({ university: 'ASE' })).every((p) => p.nearestUniversity.name === 'ASE'));
+  assert.ok((await repo.search({ universities: ['ASE'] })).every((p) => p.nearestUniversity.name === 'ASE'));
   assert.ok((await repo.search({ types: ['studio'] })).every((p) => p.type === 'studio'));
   assert.ok((await repo.search({ bedrooms: [3] })).every((p) => p.bedrooms >= 3));
   assert.ok((await repo.search({ text: 'timisoara' })).length > 0);
@@ -70,8 +70,8 @@ const ron = (p: { rent: PropertyRecord['rent'] }) => toRon(p.rent, rate);
   assert.equal((await strong.getById(eurListing.id))?.rent.amount, eurListing.rent.amount);
 
   // Bathrooms: min and max work together ("exactly 1")
-  assert.ok((await repo.search({ minBathrooms: 1, maxBathrooms: 1 })).every((p) => p.bathrooms === 1));
-  assert.ok((await repo.search({ minBathrooms: 2 })).every((p) => p.bathrooms >= 2));
+  assert.ok((await repo.search({ bathrooms: ['one'] })).every((p) => p.bathrooms === 1));
+  assert.ok((await repo.search({ bathrooms: ['two_plus'] })).every((p) => p.bathrooms >= 2));
 
   // Read model: provider summary for every listing
   assert.ok(all.every((p) => p.owner.displayName.length > 0 && p.owner.providerType));

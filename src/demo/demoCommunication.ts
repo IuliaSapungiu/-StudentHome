@@ -1,3 +1,4 @@
+
 import { DEMO_PROPERTIES } from '../data/mockProperties';
 import { addDays, toLocalDateTime } from '../lib/dateTime';
 import type { ApplicationStore } from '../features/applications/mockApplicationRepository';
@@ -76,7 +77,12 @@ export async function seedDemoCommunication(h: Handles, user: MockUser, now: Dat
   // Read state: in the Mara conversation the student has read the first reply; the later reply and the confirmed-viewing
   // card are unread (2, as in the design). The other two conversations have been read.
   await h.messaging.reads.update((rows) => ({
-    rows: [...rows, { conversationId: mara.id, userId: uid, lastReadAt: at(184), hiddenAt: null, deletedAt: null }, { conversationId: campus.id, userId: uid, lastReadAt: at(1300), hiddenAt: null, deletedAt: null }, { conversationId: andrei.id, userId: uid, lastReadAt: at(3800), hiddenAt: null, deletedAt: null }],
+    rows: [
+      ...rows,
+      { conversationId: mara.id, userId: uid, lastReadAt: at(184), hiddenAt: null, deletedAt: null, clearedAt: null },
+      { conversationId: campus.id, userId: uid, lastReadAt: at(1300), hiddenAt: null, deletedAt: null, clearedAt: null },
+      { conversationId: andrei.id, userId: uid, lastReadAt: at(3800), hiddenAt: null, deletedAt: null, clearedAt: null },
+    ],
     result: undefined,
   }));
   await h.viewings.update((rows) => ({ rows: [...rows, confirmed, pending], result: undefined }));

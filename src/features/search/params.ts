@@ -2,16 +2,19 @@ import type { Amenity, PropertyType, SortOption } from '../../data/types';
 import { isValidIsoDate } from '../../lib/dates';
 import {
   AMENITIES,
+  BATHROOM_CHOICES,
   DISTANCE_CHOICES,
   PROPERTY_TYPES,
   SORT_OPTIONS,
   defaultSearchState,
   normalizeSearchState,
   type BathroomChoice,
+  type DistanceChoice,
   type SearchState,
 } from './searchState';
 
 // Search <-> URL parameters (deep links such as /search?city=Cluj-Napoca&verified=1).
+// City, university, distance, bedroom, bathroom and type parameters take comma-separated lists (?city=Iași,Cluj-Napoca).
 // Parsing is forgiving: anything invalid is ignored rather than failing. Budget limits (min, max)
 // are RON-equivalent amounts, like the state itself.
 
@@ -34,26 +37,33 @@ export function parseSearchParams(raw: RawParams): Partial<SearchState> {
   const out: Partial<SearchState> = {};
   const q = first(raw.q)?.trim();
   if (q) out.text = q.slice(0, 100);
-  const city = first(raw.city)?.trim();
-  if (city) out.city = city;
-  const uni = first(raw.uni)?.trim();
-  if (uni) out.university = uni;
+  const cities = list(raw.city);
+  if (cities.length) out.cities = cities;
+  const unis = list(raw.uni);
+  if (unis.length) out.universities = unis;
 
   const min = positive(first(raw.min));
   const max = positive(first(raw.max));
   if (min !== undefined || max !== undefined) out.budget = { minRon: min ?? null, maxRon: max ?? null };
 
-  const maxMin = Number(first(raw.maxMin));
-  if (DISTANCE_CHOICES.includes(maxMin)) out.maxMinutesToUniversity = maxMin;
+  // `dist` is a list of bands. The older single `maxMin` link (15 or 30 minutes) still works: "up to N minutes" = every band up to N.
+  const dist = list(raw.dist).filter((d): d is DistanceChoice => (DISTANCE_CHOICES as readonly string[]).includes(d));
+  const legacyMax = Number(first(raw.maxMin));
+  if (dist.length) out.distances = dist;
+  else if (legacyMax === 15) out.distances = ['within_15'];
+  else if (legacyMax === 30) out.distances = ['within_15', 'within_30'];
 
   const beds = list(raw.beds)
     .map(Number)
     .filter((n) => Number.isInteger(n));
   if (beds.length) out.bedrooms = beds;
 
-  const baths = first(raw.baths);
-  if (baths === 'one' || baths === '1') out.bathrooms = 'one';
-  else if (baths === 'two_plus' || baths === '2+' || baths === '2') out.bathrooms = 'two_plus';
+  const baths: BathroomChoice[] = [];
+  for (const b of list(raw.baths)) {
+    if (b === 'one' || b === '1') baths.push('one');
+    else if (b === 'two_plus' || b === '2+' || b === '2') baths.push('two_plus');
+  }
+  if (baths.length) out.bathrooms = baths.filter((b, i) => baths.indexOf(b) === i && BATHROOM_CHOICES.includes(b));
 
   const types = list(raw.types).filter((t): t is PropertyType => (PROPERTY_TYPES as readonly string[]).includes(t));
   if (types.length) out.types = types;
@@ -83,13 +93,13 @@ export function searchStateToParams(state: SearchState): Record<string, string> 
   const s = normalizeSearchState(state);
   const p: Record<string, string> = {};
   if (s.text.trim()) p.q = s.text.trim();
-  if (s.city) p.city = s.city;
-  if (s.university) p.uni = s.university;
+  if (s.cities.length) p.city = s.cities.join(',');
+  if (s.universities.length) p.uni = s.universities.join(',');
   if (s.budget.minRon !== null) p.min = String(s.budget.minRon);
   if (s.budget.maxRon !== null) p.max = String(s.budget.maxRon);
-  if (s.maxMinutesToUniversity !== null) p.maxMin = String(s.maxMinutesToUniversity);
+  if (s.distances.length) p.dist = s.distances.join(',');
   if (s.bedrooms.length) p.beds = s.bedrooms.join(',');
-  if (s.bathrooms !== 'any') p.baths = s.bathrooms as BathroomChoice;
+  if (s.bathrooms.length) p.baths = s.bathrooms.join(',');
   if (s.types.length) p.types = s.types.join(',');
   if (s.availableBy) p.by = s.availableBy;
   if (s.amenities.length) p.amenities = s.amenities.join(',');
